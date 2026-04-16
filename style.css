@@ -1,0 +1,81 @@
+:root {
+  --bg-top: #071d2b;
+  --bg-bottom: #133f5e;
+  --ink: #e7f7ff;
+  --ink-soft: #b9e9ff;
+  --glass: rgba(9, 27, 40, 0.58);
+  --glass-border: rgba(133, 217, 255, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 20% 12%, rgba(98, 225, 255, 0.28), transparent 36%),
+    radial-gradient(circle at 86% 88%, rgba(255, 181, 110, 0.2), transparent 30%),
+    linear-gradient(170deg, var(--bg-top), var(--bg-bottom));
+}
+
+#world {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;
+}
+
+.hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  right: max(12px, env(safe-area-inset-right));
+  max-width: 24rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass);
+  backdrop-filter: blur(7px);
+  animation: intro 520ms cubic-bezier(0.2, 0.85, 0.3, 1) both;
+}
+
+.hud h1 {
+  margin: 0;
+  font-size: clamp(1rem, 2.3vw, 1.2rem);
+  font-family: "Rubik Mono One", "Space Grotesk", sans-serif;
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+}
+
+.hud p {
+  margin: 0.34rem 0 0;
+  font-size: clamp(0.87rem, 2.1vw, 0.96rem);
+  color: var(--ink-soft);
+}
+
+.hud .meta {
+  font-weight: 700;
+  color: #d6f3ff;
+}
+
+@keyframes intro {
+  from {
+    opacity: 0;
+    transform: translateY(-9px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
