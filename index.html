@@ -11,12 +11,18 @@
 </head>
 <body>
   <canvas id="world" aria-label="Liquid game canvas"></canvas>
+  <canvas id="fluid-overlay" aria-hidden="true"></canvas>
 
   <section class="hud" aria-live="polite">
     <h1>more-cup</h1>
     <p>Hold anywhere to pour liquid.</p>
     <p class="meta" id="stats">drops: 0</p>
   </section>
+
+  <aside class="controls-panel" id="controls-panel" aria-label="Water controls">
+    <h2>water lab</h2>
+    <div class="controls-list" id="controls-list"></div>
+  </aside>
 
   <script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
   <script src="game.js"></script>
