@@ -79,6 +79,11 @@
     wallThickness: 120,
     floorHeight: 90,
     platformThickness: 24,
+    stationaryPlatformHeight: 130,
+    draggablePlatformHeight: 250,
+    stationaryBottomHoleWidth: 90,
+    draggableMaxStep: 7,
+    draggableTiltRate: 1.7,
     surfaceRestitution: 0.05,
   };
 
@@ -104,6 +109,7 @@
     slop: "Allowed penetration tolerance in collisions. Lower values are tighter but can be jittery.",
     "velocity-x": "Random horizontal launch speed for newly spawned particles.",
     "velocity-y": "Random downward launch speed for newly spawned particles.",
+    "stationary-bottom-hole": "Width of the opening in the stationary platform's bottom.",
     "cell-size": "Grid resolution used by metaballs. Smaller cells look smoother but cost more performance.",
     threshold: "Iso-surface cutoff for the metaballs field. Lower values create thicker liquid.",
     "influence-scale": "How far each particle influences the metaballs field.",
@@ -174,6 +180,10 @@
   let isPouring = false;
   let isDraggingPlatform = false;
   let dragOffset = { x: 0, y: 0 };
+  let dragTarget = null;
+  let draggableTiltAngle = 0;
+  let tiltInput = 0;
+  const tiltKeys = { left: false, right: false };
   let pourPoint = { x: window.innerWidth / 2, y: 80 };
   let emitAccumulator = 0;
   let totalDrops = 0;
@@ -324,6 +334,13 @@
         1,
         WORLD.surfaceRestitution
       );
+      WORLD.stationaryBottomHoleWidth = clampNumber(
+        savedWorld.stationaryBottomHoleWidth,
+        0,
+        260,
+        WORLD.stationaryBottomHoleWidth,
+        true
+      );
     }
 
     const savedView = parsed.view;
@@ -381,6 +398,7 @@
       },
       world: {
         surfaceRestitution: WORLD.surfaceRestitution,
+        stationaryBottomHoleWidth: WORLD.stationaryBottomHoleWidth,
       },
       view: {
         particlesOnly: VIEW.particlesOnly,
@@ -702,6 +720,18 @@
             get: () => WORLD.surfaceRestitution,
             set: (value) => {
               setWorldSurfaceRestitution(value);
+            },
+          },
+          {
+            id: "stationary-bottom-hole",
+            label: "stationary bottom hole",
+            min: 0,
+            max: 260,
+            step: 1,
+            get: () => WORLD.stationaryBottomHoleWidth,
+            set: (value) => {
+              WORLD.stationaryBottomHoleWidth = Math.round(value);
+              buildWorld();
             },
           },
           {
@@ -1056,6 +1086,76 @@
     }
   }
 
+  function createUPlatform({
+    x,
+    y,
+    width,
+    height,
+    thickness,
+    bottomGap = 0,
+    friction,
+    fillStyle,
+    strokeStyle,
+  }) {
+    const partOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    };
+
+    const sideHeight = Math.max(thickness * 2, height);
+    const gap = clamp(bottomGap, 0, Math.max(0, width - thickness * 2));
+    const bottomSegmentWidth = (width - gap) / 2;
+    const leftX = x - width / 2 + thickness / 2;
+    const rightX = x + width / 2 - thickness / 2;
+    const bottomY = y + sideHeight / 2 - thickness / 2;
+
+    const parts = [
+      Bodies.rectangle(leftX, y, thickness, sideHeight, partOptions),
+      Bodies.rectangle(rightX, y, thickness, sideHeight, partOptions),
+    ];
+
+    if (gap <= 0) {
+      parts.push(Bodies.rectangle(x, bottomY, width, thickness, partOptions));
+    } else {
+      parts.push(
+        Bodies.rectangle(
+          x - gap / 2 - bottomSegmentWidth / 2,
+          bottomY,
+          bottomSegmentWidth,
+          thickness,
+          partOptions
+        ),
+        Bodies.rectangle(
+          x + gap / 2 + bottomSegmentWidth / 2,
+          bottomY,
+          bottomSegmentWidth,
+          thickness,
+          partOptions
+        )
+      );
+    }
+
+    const platform = Body.create({
+      isStatic: true,
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      parts,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    });
+
+    Body.setStatic(platform, true);
+    return platform;
+  }
+
   function buildWorld() {
     removeWorldBodies();
 
@@ -1091,37 +1191,30 @@
     const platformY = height * (2 / 3);
     const platformWidth = Math.max(180, Math.min(width * 0.62, 500));
 
-    centerPlatform = Bodies.rectangle(width / 2, platformY, platformWidth, WORLD.platformThickness, {
-      isStatic: true,
+    centerPlatform = createUPlatform({
+      x: width / 2,
+      y: platformY,
+      width: platformWidth,
+      height: WORLD.stationaryPlatformHeight,
+      thickness: WORLD.platformThickness,
+      bottomGap: WORLD.stationaryBottomHoleWidth,
       friction: 0.35,
-      restitution: WORLD.surfaceRestitution,
-      chamfer: { radius: 10 },
-      render: {
-        fillStyle: "#e0bc7a",
-        strokeStyle: "#f6dbab",
-        lineWidth: 2,
-      },
+      fillStyle: "#e0bc7a",
+      strokeStyle: "#f6dbab",
     });
 
     const draggableWidth = Math.max(110, Math.min(width * 0.3, 230));
-    const draggableHeight = WORLD.platformThickness;
-    draggablePlatform = Bodies.rectangle(
-      width * 0.72,
-      height * 0.44,
-      draggableWidth,
-      draggableHeight,
-      {
-        isStatic: true,
-        friction: 0.32,
-        restitution: WORLD.surfaceRestitution,
-        chamfer: { radius: 10 },
-        render: {
-          fillStyle: "#8fb9ff",
-          strokeStyle: "#d7e5ff",
-          lineWidth: 2,
-        },
-      }
-    );
+    draggablePlatform = createUPlatform({
+      x: width * 0.72,
+      y: height * 0.44,
+      width: draggableWidth,
+      height: WORLD.draggablePlatformHeight,
+      thickness: WORLD.platformThickness,
+      friction: 0.32,
+      fillStyle: "#8fb9ff",
+      strokeStyle: "#d7e5ff",
+    });
+    Body.setAngle(draggablePlatform, draggableTiltAngle);
 
     boundaries = [floor, leftWall, rightWall];
     Composite.add(engine.world, [...boundaries, centerPlatform, draggablePlatform]);
@@ -1136,10 +1229,16 @@
 
     if (centerPlatform) {
       centerPlatform.restitution = value;
+      centerPlatform.parts.forEach((part) => {
+        part.restitution = value;
+      });
     }
 
     if (draggablePlatform) {
       draggablePlatform.restitution = value;
+      draggablePlatform.parts.forEach((part) => {
+        part.restitution = value;
+      });
     }
   }
 
@@ -1478,17 +1577,33 @@
     return Math.max(min, Math.min(max, value));
   }
 
+  function wrapAngle(angle) {
+    const fullTurn = Math.PI * 2;
+    return ((angle % fullTurn) + fullTurn) % fullTurn;
+  }
+
   function isPointInsideBody(point, body) {
     if (!body) {
+      return false;
+    }
+
+    if (body.parts && body.parts.length > 1) {
+      for (let i = 1; i < body.parts.length; i += 1) {
+        const part = body.parts[i];
+        if (Bounds.contains(part.bounds, point) && Vertices.contains(part.vertices, point)) {
+          return true;
+        }
+      }
+
       return false;
     }
 
     return Bounds.contains(body.bounds, point) && Vertices.contains(body.vertices, point);
   }
 
-  function moveDraggablePlatform(pointerWorldPoint) {
+  function clampedDraggablePlatformPosition(pointerWorldPoint) {
     if (!draggablePlatform) {
-      return;
+      return null;
     }
 
     const halfWidth = (draggablePlatform.bounds.max.x - draggablePlatform.bounds.min.x) / 2;
@@ -1506,10 +1621,58 @@
       render.options.height - halfHeight - 10
     );
 
-    Body.setPosition(draggablePlatform, { x, y });
+    return { x, y };
+  }
+
+  function moveDraggablePlatform(pointerWorldPoint) {
+    dragTarget = clampedDraggablePlatformPosition(pointerWorldPoint);
+  }
+
+  function settleDraggablePlatform() {
+    if (!draggablePlatform) {
+      return;
+    }
+
     Body.setVelocity(draggablePlatform, { x: 0, y: 0 });
     Body.setAngularVelocity(draggablePlatform, 0);
-    Body.setAngle(draggablePlatform, 0);
+    draggableTiltAngle = draggablePlatform.angle;
+  }
+
+  function stepDraggablePlatform() {
+    if (!isDraggingPlatform || !draggablePlatform || !dragTarget) {
+      return;
+    }
+
+    const dx = dragTarget.x - draggablePlatform.position.x;
+    const dy = dragTarget.y - draggablePlatform.position.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance < 0.001) {
+      settleDraggablePlatform();
+      return;
+    }
+
+    const maxStep = Math.max(1, WORLD.draggableMaxStep);
+    const scale = Math.min(1, maxStep / distance);
+    const nextPosition = {
+      x: draggablePlatform.position.x + dx * scale,
+      y: draggablePlatform.position.y + dy * scale,
+    };
+
+    Body.setPosition(draggablePlatform, nextPosition, true);
+    Body.setAngularVelocity(draggablePlatform, 0);
+  }
+
+  function stepDraggablePlatformTilt(deltaMs) {
+    if (!draggablePlatform || tiltInput === 0) {
+      return;
+    }
+
+    const dt = Math.min(Math.max(deltaMs || 1000 / 60, 0), 34) / 1000;
+    const nextAngle = wrapAngle(draggablePlatform.angle + tiltInput * WORLD.draggableTiltRate * dt);
+
+    draggableTiltAngle = nextAngle;
+    Body.setAngle(draggablePlatform, nextAngle, true);
   }
 
   function spawnDrop(sourceX, sourceY) {
@@ -1578,6 +1741,7 @@
         x: pointerWorldPoint.x - draggablePlatform.position.x,
         y: pointerWorldPoint.y - draggablePlatform.position.y,
       };
+      dragTarget = clampedDraggablePlatformPosition(pointerWorldPoint);
       canvas.setPointerCapture(evt.pointerId);
       return;
     }
@@ -1616,9 +1780,30 @@
     isDraggingPlatform = false;
     activePointerId = null;
     dragOffset = { x: 0, y: 0 };
+    dragTarget = null;
+    settleDraggablePlatform();
 
     if (canvas.hasPointerCapture(evt.pointerId)) {
       canvas.releasePointerCapture(evt.pointerId);
+    }
+  }
+
+  function updateTiltInput(evt, isPressed) {
+    if (evt.key !== "ArrowLeft" && evt.key !== "ArrowRight") {
+      return;
+    }
+
+    evt.preventDefault();
+
+    if (evt.key === "ArrowLeft") {
+      tiltKeys.left = isPressed;
+    } else {
+      tiltKeys.right = isPressed;
+    }
+
+    tiltInput = (tiltKeys.right ? 1 : 0) - (tiltKeys.left ? 1 : 0);
+    if (tiltInput === 0) {
+      settleDraggablePlatform();
     }
   }
 
@@ -1652,6 +1837,12 @@
     requestAnimationFrame(tick);
   }
 
+  // Move the draggable cup during physics updates so particles collide with its path.
+  Events.on(engine, "beforeUpdate", (event) => {
+    stepDraggablePlatform();
+    stepDraggablePlatformTilt(event.delta);
+  });
+
   // Remove particles that drift too far below/above the playable area.
   Events.on(engine, "afterUpdate", () => {
     const width = render.options.width;
@@ -1680,6 +1871,8 @@
   canvas.addEventListener("pointermove", movePour, { passive: false });
   canvas.addEventListener("pointerup", stopPour);
   canvas.addEventListener("pointercancel", stopPour);
+  window.addEventListener("keydown", (evt) => updateTiltInput(evt, true));
+  window.addEventListener("keyup", (evt) => updateTiltInput(evt, false));
   window.addEventListener("resize", resize);
 
   resizeFluidBuffers();
