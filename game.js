@@ -9,12 +9,14 @@
     Vertices,
     Composite,
     Events,
+    Query,
   } = Matter;
 
   const canvas = document.getElementById("world");
   const fluidCanvas = document.getElementById("fluid-overlay");
   const fluidCtx = fluidCanvas ? fluidCanvas.getContext("2d") : null;
   const stats = document.getElementById("stats");
+  const cupList = document.getElementById("cup-list");
   const controlsPanel = document.getElementById("controls-panel");
   const controlsList = document.getElementById("controls-list");
 
@@ -29,18 +31,27 @@
     lineWidth: 1,
   };
 
+  const SCORE_VALUES = {
+    cupTouch: 15,
+    environmentTouch: 4,
+    particleSplash: 1,
+    maxSplashesPerDrop: 4,
+  };
+
   const WATER = {
     gravityY: 1.1,
-    solverPositionIterations: 8,
-    solverVelocityIterations: 6,
+    solverPositionIterations: 6,
+    solverVelocityIterations: 4,
     emissionRate: 170,
-    maxBodies: 6000,
+    maxBodies: 10000,
+    cullBatchSize: 96,
+    particleSides: 7,
     dropRadiusMin: 4,
     dropRadiusMax: 6.7,
     spawnSpreadX: 7,
     spawnSpreadY: 4,
     spawnOffsetY: -10,
-    restitution: 0.03,
+    restitution: 0.58,
     friction: 0.01,
     frictionStatic: 0,
     frictionAir: 0.004,
@@ -78,14 +89,171 @@
   const WORLD = {
     wallThickness: 120,
     floorHeight: 90,
+    cupScale: 0.75,
     platformThickness: 24,
     stationaryPlatformHeight: 130,
     draggablePlatformHeight: 250,
     stationaryBottomHoleWidth: 90,
-    draggableMaxStep: 7,
-    draggableTiltRate: 1.7,
-    surfaceRestitution: 0.05,
+    draggableMaxStep: 14,
+    draggableTiltRate: 3.4,
+    draggableCollisionStep: 3,
+    draggableCollisionAngleStep: 0.035,
+    drainWidth: 125,
+    surfaceRestitution: 0.46,
   };
+
+  const MOVABLE_CUP_LAYOUTS = [
+    {
+      id: "blue-scoop",
+      label: "Blue Scoop",
+      xRatio: 0.72,
+      yRatio: 0.44,
+      widthScale: 1,
+      heightScale: 1,
+      fillStyle: "#8fb9ff",
+      strokeStyle: "#d7e5ff",
+      bottomGaps: [{ center: 0, width: 0.26 }],
+      leftSideGaps: [{ center: -0.16, height: 0.14 }],
+      rightSideGaps: [],
+      sideLean: 0,
+      angle: 0,
+    },
+    {
+      id: "green-funnel",
+      label: "Green Funnel",
+      xRatio: 0.24,
+      yRatio: 0.38,
+      widthScale: 0.72,
+      heightScale: 0.72,
+      fillStyle: "#56d689",
+      strokeStyle: "#c8ffd9",
+      bottomGaps: [
+        { center: -0.24, width: 0.12 },
+        { center: 0.24, width: 0.12 },
+      ],
+      leftSideGaps: [],
+      rightSideGaps: [{ center: 0.08, height: 0.18 }],
+      sideLean: 0.16,
+      angle: -0.18,
+    },
+    {
+      id: "coral-basin",
+      label: "Coral Basin",
+      xRatio: 0.82,
+      yRatio: 0.24,
+      widthScale: 1.16,
+      heightScale: 0.54,
+      fillStyle: "#ff8f85",
+      strokeStyle: "#ffd2ca",
+      bottomGaps: [
+        { center: -0.32, width: 0.09 },
+        { center: 0, width: 0.09 },
+        { center: 0.32, width: 0.09 },
+      ],
+      leftSideGaps: [{ center: 0.12, height: 0.16 }],
+      rightSideGaps: [{ center: -0.12, height: 0.16 }],
+      sideLean: -0.1,
+      angle: 0.12,
+    },
+    {
+      id: "violet-orb-cup",
+      label: "Round Cup",
+      shape: "round",
+      xRatio: 0.18,
+      yRatio: 0.64,
+      widthScale: 0.88,
+      heightScale: 1.04,
+      fillStyle: "#b889ff",
+      strokeStyle: "#ead7ff",
+      startAngle: Math.PI * 0.08,
+      endAngle: Math.PI * 0.92,
+      beadScale: 0.58,
+      holeGaps: [],
+      angle: 0.24,
+    },
+    {
+      id: "gold-triangle-cup",
+      label: "Triangle Cup",
+      shape: "polygon",
+      xRatio: 0.38,
+      yRatio: 0.25,
+      widthScale: 0.78,
+      heightScale: 0.7,
+      fillStyle: "#ffd45f",
+      strokeStyle: "#fff0b7",
+      points: [
+        { x: -0.5, y: -0.42 },
+        { x: 0, y: 0.5 },
+        { x: 0.5, y: -0.42 },
+      ],
+      angle: -0.12,
+    },
+    {
+      id: "teal-octagon-cup",
+      label: "Octagon Cup",
+      shape: "polygon",
+      xRatio: 0.58,
+      yRatio: 0.24,
+      widthScale: 0.86,
+      heightScale: 0.76,
+      fillStyle: "#36d4c9",
+      strokeStyle: "#bdfbf6",
+      points: [
+        { x: -0.36, y: -0.5 },
+        { x: -0.5, y: -0.28 },
+        { x: -0.5, y: 0.18 },
+        { x: -0.32, y: 0.42 },
+        { x: 0, y: 0.52 },
+        { x: 0.32, y: 0.42 },
+        { x: 0.5, y: 0.18 },
+        { x: 0.5, y: -0.28 },
+        { x: 0.36, y: -0.5 },
+      ],
+      angle: 0.08,
+    },
+    {
+      id: "dmac-cup",
+      label: "DMAC Cup",
+      shape: "dmac",
+      xRatio: 0.74,
+      yRatio: 0.7,
+      widthScale: 1.12,
+      heightScale: 0.68,
+      fillStyle: "#2fd07f",
+      strokeStyle: "#d6ffd9",
+      pinStyle: "#f1c84b",
+      busStyle: "#206bbd",
+      angle: -0.08,
+    },
+    {
+      id: "dr-caley-cup",
+      label: "Dr. Caley Cup",
+      shape: "caley",
+      xRatio: 0.42,
+      yRatio: 0.72,
+      widthScale: 0.98,
+      heightScale: 0.78,
+      fillStyle: "#24304f",
+      strokeStyle: "#f4c542",
+      sensorStyle: "#67e8f9",
+      dataStyle: "#f4c542",
+      angle: 0.14,
+    },
+    {
+      id: "plug",
+      label: "Plug",
+      shape: "plug",
+      drawer: false,
+      xRatio: 0.5,
+      yRatio: 1,
+      widthScale: 0.8,
+      heightScale: 0.8,
+      fillStyle: "#b98555",
+      strokeStyle: "#ffe0b8",
+      bandStyle: "#6f472d",
+      angle: 0,
+    },
+  ];
 
   const CONTROL_HELP = {
     "particles-only": "Render only the circle particles and hide blobs.",
@@ -169,29 +337,38 @@
     minRow: 0,
     maxRow: -1,
   };
+  const metaballSampleBuffer = [];
 
   let boundaries = [];
   let centerPlatform = null;
-  let draggablePlatform = null;
+  let drainSensor = null;
+  let draggablePlatforms = [];
+  let activeDraggablePlatform = null;
+  let activeDraggableIndex = 0;
+  const spawnedCupStates = [];
 
   const waterBodies = [];
+  const waterBodySet = new Set();
+  const cupBodySet = new Set();
+  const environmentBodySet = new Set();
+  const blackHoleBodySet = new Set();
+  const blackHoleDeletionQueue = new Set();
 
   let activePointerId = null;
   let isPouring = false;
   let isDraggingPlatform = false;
   let dragOffset = { x: 0, y: 0 };
   let dragTarget = null;
-  let draggableTiltAngle = 0;
   let tiltInput = 0;
   const tiltKeys = { left: false, right: false };
   let pourPoint = { x: window.innerWidth / 2, y: 80 };
   let emitAccumulator = 0;
-  let totalDrops = 0;
+  let score = 0;
   let smoothedFps = 0;
   let lastHudUpdate = 0;
 
   if (stats) {
-    stats.textContent = "drops: 0 | fps: --";
+    stats.textContent = "score: 0 | drops: 0 | fps: --";
   }
 
   function refreshMetaballStyles() {
@@ -240,7 +417,7 @@
         true
       );
       WATER.emissionRate = clampNumber(savedWater.emissionRate, 0, 500, WATER.emissionRate);
-      WATER.maxBodies = clampNumber(savedWater.maxBodies, 200, 12000, WATER.maxBodies, true);
+      WATER.maxBodies = clampNumber(savedWater.maxBodies, 200, 30000, WATER.maxBodies, true);
       WATER.dropRadiusMin = clampNumber(savedWater.dropRadiusMin, 1, 12, WATER.dropRadiusMin);
       WATER.dropRadiusMax = clampNumber(savedWater.dropRadiusMax, 1, 14, WATER.dropRadiusMax);
       WATER.spawnSpreadX = clampNumber(savedWater.spawnSpreadX, 0, 24, WATER.spawnSpreadX);
@@ -269,7 +446,7 @@
       METABALLS.maxParticles = clampNumber(
         savedMetaballs.maxParticles,
         50,
-        1200,
+        3000,
         METABALLS.maxParticles,
         true
       );
@@ -638,11 +815,12 @@
             id: "max-bodies",
             label: "max water bodies",
             min: 200,
-            max: 12000,
+            max: 30000,
             step: 10,
             get: () => WATER.maxBodies,
             set: (value) => {
               WATER.maxBodies = Math.round(value);
+              trimWaterBodiesToLimit();
             },
           },
           {
@@ -708,7 +886,7 @@
             step: 0.01,
             get: () => WATER.restitution,
             set: (value) => {
-              WATER.restitution = value;
+              setWaterRestitution(value);
             },
           },
           {
@@ -854,7 +1032,7 @@
             id: "max-particles",
             label: "max rendered particles",
             min: 50,
-            max: 1200,
+            max: 3000,
             step: 1,
             get: () => METABALLS.maxParticles,
             set: (value) => {
@@ -1074,15 +1252,105 @@
   function removeWorldBodies() {
     boundaries.forEach((body) => Composite.remove(engine.world, body));
     boundaries = [];
+    environmentBodySet.clear();
+    cupBodySet.clear();
+    blackHoleBodySet.clear();
 
     if (centerPlatform) {
       Composite.remove(engine.world, centerPlatform);
       centerPlatform = null;
     }
 
-    if (draggablePlatform) {
-      Composite.remove(engine.world, draggablePlatform);
-      draggablePlatform = null;
+    if (drainSensor) {
+      Composite.remove(engine.world, drainSensor);
+      drainSensor = null;
+    }
+
+    draggablePlatforms.forEach((body) => Composite.remove(engine.world, body));
+    draggablePlatforms = [];
+    activeDraggablePlatform = null;
+  }
+
+  function registerScoringSurfaces() {
+    environmentBodySet.clear();
+    cupBodySet.clear();
+    blackHoleBodySet.clear();
+
+    boundaries.forEach((body) => environmentBodySet.add(body));
+    if (drainSensor) {
+      blackHoleBodySet.add(drainSensor);
+    }
+    if (centerPlatform) {
+      cupBodySet.add(centerPlatform);
+    }
+    draggablePlatforms.forEach((platform) => {
+      if (platform.toolType === "blackHole") {
+        blackHoleBodySet.add(platform);
+      } else {
+        cupBodySet.add(platform);
+      }
+    });
+  }
+
+  function gapIntervals(gaps, length) {
+    if (!Array.isArray(gaps)) {
+      return [];
+    }
+
+    return gaps
+      .map((gap) => {
+        const gapCenter = clamp(gap.center || 0, -0.5, 0.5) * length;
+        const gapLength = clamp(gap.width || gap.height || 0, 0, 0.9) * length;
+        return {
+          min: clamp(gapCenter - gapLength / 2, -length / 2, length / 2),
+          max: clamp(gapCenter + gapLength / 2, -length / 2, length / 2),
+        };
+      })
+      .filter((gap) => gap.max - gap.min > 1)
+      .sort((a, b) => a.min - b.min);
+  }
+
+  function addSegmentedRectangleParts({
+    parts,
+    centerX,
+    centerY,
+    length,
+    thickness,
+    angle = 0,
+    axis = "x",
+    gaps = [],
+    options,
+  }) {
+    const intervals = gapIntervals(gaps, length);
+    let cursor = -length / 2;
+
+    intervals.forEach((gap) => {
+      addSegment(cursor, gap.min);
+      cursor = Math.max(cursor, gap.max);
+    });
+
+    addSegment(cursor, length / 2);
+
+    function addSegment(start, end) {
+      const segmentLength = end - start;
+      if (segmentLength <= 1) {
+        return;
+      }
+
+      const offset = (start + end) / 2;
+      const segmentX =
+        centerX + (axis === "x" ? Math.cos(angle) * offset : -Math.sin(angle) * offset);
+      const segmentY =
+        centerY + (axis === "x" ? Math.sin(angle) * offset : Math.cos(angle) * offset);
+      const segmentWidth = axis === "x" ? segmentLength : thickness;
+      const segmentHeight = axis === "x" ? thickness : segmentLength;
+
+      parts.push(
+        Bodies.rectangle(segmentX, segmentY, segmentWidth, segmentHeight, {
+          ...options,
+          angle,
+        })
+      );
     }
   }
 
@@ -1093,6 +1361,10 @@
     height,
     thickness,
     bottomGap = 0,
+    bottomGaps = null,
+    leftSideGaps = null,
+    rightSideGaps = null,
+    sideLean = 0,
     friction,
     fillStyle,
     strokeStyle,
@@ -1108,34 +1380,273 @@
     };
 
     const sideHeight = Math.max(thickness * 2, height);
-    const gap = clamp(bottomGap, 0, Math.max(0, width - thickness * 2));
-    const bottomSegmentWidth = (width - gap) / 2;
+    const bottomHolePattern =
+      bottomGaps || (bottomGap > 0 ? [{ center: 0, width: bottomGap / width }] : []);
     const leftX = x - width / 2 + thickness / 2;
     const rightX = x + width / 2 - thickness / 2;
     const bottomY = y + sideHeight / 2 - thickness / 2;
 
-    const parts = [
-      Bodies.rectangle(leftX, y, thickness, sideHeight, partOptions),
-      Bodies.rectangle(rightX, y, thickness, sideHeight, partOptions),
-    ];
+    const parts = [];
+    addSegmentedRectangleParts({
+      parts,
+      centerX: leftX,
+      centerY: y,
+      length: sideHeight,
+      thickness,
+      angle: -sideLean,
+      axis: "y",
+      gaps: leftSideGaps,
+      options: partOptions,
+    });
+    addSegmentedRectangleParts({
+      parts,
+      centerX: rightX,
+      centerY: y,
+      length: sideHeight,
+      thickness,
+      angle: sideLean,
+      axis: "y",
+      gaps: rightSideGaps,
+      options: partOptions,
+    });
+    addSegmentedRectangleParts({
+      parts,
+      centerX: x,
+      centerY: bottomY,
+      length: width,
+      thickness,
+      axis: "x",
+      gaps: bottomHolePattern,
+      options: partOptions,
+    });
 
-    if (gap <= 0) {
-      parts.push(Bodies.rectangle(x, bottomY, width, thickness, partOptions));
-    } else {
+    const platform = Body.create({
+      isStatic: true,
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      parts,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    });
+
+    Body.setStatic(platform, true);
+    return platform;
+  }
+
+  function createRoundCup({
+    x,
+    y,
+    width,
+    height,
+    thickness,
+    startAngle,
+    endAngle,
+    beadScale = 0.55,
+    holeGaps = [],
+    friction,
+    fillStyle,
+    strokeStyle,
+  }) {
+    const beadRadius = Math.max(4, thickness * beadScale);
+    const radiusX = Math.max(beadRadius * 3, width / 2 - beadRadius);
+    const radiusY = Math.max(beadRadius * 3, height / 2 - beadRadius);
+    const arcStart = startAngle ?? Math.PI * 0.08;
+    const arcEnd = endAngle ?? Math.PI * 0.92;
+    const arcLength = Math.max(radiusX, radiusY) * Math.abs(arcEnd - arcStart);
+    const beadCount = Math.max(12, Math.ceil(arcLength / (beadRadius * 1.18)));
+    const holes = Array.isArray(holeGaps)
+      ? holeGaps
+          .map((gap) => {
+            const center = clamp(gap.center || 0, 0, 1);
+            const width = clamp(gap.width || 0, 0, 0.35);
+            return {
+              min: clamp(center - width / 2, 0, 1),
+              max: clamp(center + width / 2, 0, 1),
+            };
+          })
+          .filter((gap) => gap.max - gap.min > 0.005)
+      : [];
+    const partOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    };
+    const parts = [];
+
+    for (let i = 0; i <= beadCount; i += 1) {
+      const t = i / beadCount;
+      const isHole = holes.some((hole) => t >= hole.min && t <= hole.max);
+      if (isHole) {
+        continue;
+      }
+
+      const angle = arcStart + (arcEnd - arcStart) * t;
+      parts.push(
+        Bodies.circle(x + Math.cos(angle) * radiusX, y + Math.sin(angle) * radiusY, beadRadius, {
+          ...partOptions,
+        })
+      );
+    }
+
+    const platform = Body.create({
+      isStatic: true,
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      parts,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    });
+
+    Body.setStatic(platform, true);
+    return platform;
+  }
+
+  function createPolygonCup({
+    x,
+    y,
+    width,
+    height,
+    thickness,
+    points,
+    friction,
+    fillStyle,
+    strokeStyle,
+  }) {
+    const partOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    };
+    const vertices = Array.isArray(points)
+      ? points.map((point) => ({
+          x: x + point.x * width,
+          y: y + point.y * height,
+        }))
+      : [];
+    const parts = [];
+
+    for (let i = 0; i < vertices.length - 1; i += 1) {
+      const start = vertices[i];
+      const end = vertices[i + 1];
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = Math.hypot(dx, dy);
+
+      if (length <= 1) {
+        continue;
+      }
+
+      parts.push(
+        Bodies.rectangle((start.x + end.x) / 2, (start.y + end.y) / 2, length, thickness, {
+          ...partOptions,
+          angle: Math.atan2(dy, dx),
+        })
+      );
+    }
+
+    vertices.forEach((point) => {
+      parts.push(Bodies.circle(point.x, point.y, thickness / 2, partOptions));
+    });
+
+    const platform = Body.create({
+      isStatic: true,
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      parts,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    });
+
+    Body.setStatic(platform, true);
+    return platform;
+  }
+
+  function createDmacCup({
+    x,
+    y,
+    width,
+    height,
+    thickness,
+    friction,
+    fillStyle,
+    strokeStyle,
+    pinStyle,
+    busStyle,
+  }) {
+    const wallOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    };
+    const pinOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle: pinStyle,
+        strokeStyle: "#fff2a8",
+        lineWidth: 1.5,
+      },
+    };
+    const busOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle: busStyle,
+        strokeStyle: "#a9dbff",
+        lineWidth: 1.5,
+      },
+    };
+    const sideHeight = Math.max(thickness * 2, height);
+    const leftX = x - width / 2 + thickness / 2;
+    const rightX = x + width / 2 - thickness / 2;
+    const bottomY = y + sideHeight / 2 - thickness / 2;
+    const parts = [
+      Bodies.rectangle(leftX, y, thickness, sideHeight, wallOptions),
+      Bodies.rectangle(rightX, y, thickness, sideHeight, wallOptions),
+      Bodies.rectangle(x, bottomY, width, thickness, busOptions),
+    ];
+    const pinCount = 5;
+    const pinWidth = thickness * 0.65;
+    const pinHeight = thickness * 1.3;
+
+    for (let i = 0; i < pinCount; i += 1) {
+      const t = pinCount === 1 ? 0.5 : i / (pinCount - 1);
+      const pinY = y - sideHeight * 0.31 + t * sideHeight * 0.62;
+      parts.push(
+        Bodies.rectangle(leftX - thickness * 0.78, pinY, pinWidth, pinHeight, pinOptions),
+        Bodies.rectangle(rightX + thickness * 0.78, pinY, pinWidth, pinHeight, pinOptions)
+      );
+    }
+
+    for (let i = -1; i <= 1; i += 1) {
       parts.push(
         Bodies.rectangle(
-          x - gap / 2 - bottomSegmentWidth / 2,
-          bottomY,
-          bottomSegmentWidth,
-          thickness,
-          partOptions
-        ),
-        Bodies.rectangle(
-          x + gap / 2 + bottomSegmentWidth / 2,
-          bottomY,
-          bottomSegmentWidth,
-          thickness,
-          partOptions
+          x + i * width * 0.22,
+          bottomY - thickness * 0.68,
+          width * 0.16,
+          thickness * 0.36,
+          busOptions
         )
       );
     }
@@ -1156,6 +1667,346 @@
     return platform;
   }
 
+  function createCaleyCup({
+    x,
+    y,
+    width,
+    height,
+    thickness,
+    friction,
+    fillStyle,
+    strokeStyle,
+    sensorStyle,
+    dataStyle,
+  }) {
+    const wallOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    };
+    const sensorOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle: sensorStyle,
+        strokeStyle: "#dffcff",
+        lineWidth: 1.5,
+      },
+    };
+    const dataOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle: dataStyle,
+        strokeStyle: "#fff2a8",
+        lineWidth: 1.5,
+      },
+    };
+    const sideHeight = Math.max(thickness * 2, height);
+    const leftX = x - width / 2 + thickness / 2;
+    const rightX = x + width / 2 - thickness / 2;
+    const bottomY = y + sideHeight / 2 - thickness / 2;
+    const parts = [
+      Bodies.rectangle(leftX, y, thickness, sideHeight, wallOptions),
+      Bodies.rectangle(rightX, y, thickness, sideHeight, wallOptions),
+      Bodies.rectangle(x, bottomY, width, thickness, wallOptions),
+      Bodies.rectangle(x, y - sideHeight * 0.48, thickness * 0.46, sideHeight * 0.22, dataOptions),
+      Bodies.circle(x, y - sideHeight * 0.62, thickness * 0.48, sensorOptions),
+    ];
+    const nodeY = bottomY - thickness * 0.85;
+    const nodeRadius = thickness * 0.32;
+    const nodeOffsets = [-0.26, 0, 0.26];
+
+    nodeOffsets.forEach((offset) => {
+      parts.push(Bodies.circle(x + width * offset, nodeY, nodeRadius, dataOptions));
+    });
+
+    parts.push(
+      Bodies.rectangle(x - width * 0.13, nodeY, width * 0.2, thickness * 0.22, dataOptions),
+      Bodies.rectangle(x + width * 0.13, nodeY, width * 0.2, thickness * 0.22, dataOptions),
+      Bodies.circle(leftX + thickness * 1.05, y - sideHeight * 0.18, thickness * 0.42, sensorOptions),
+      Bodies.circle(rightX - thickness * 1.05, y - sideHeight * 0.18, thickness * 0.42, sensorOptions)
+    );
+
+    const platform = Body.create({
+      isStatic: true,
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      parts,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    });
+
+    Body.setStatic(platform, true);
+    return platform;
+  }
+
+  function createPlug({
+    x,
+    y,
+    width,
+    height,
+    thickness,
+    friction,
+    fillStyle,
+    strokeStyle,
+    bandStyle,
+  }) {
+    const radius = Math.max(thickness, Math.min(width, height) / 2);
+    const capOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    };
+    const bandOptions = {
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      render: {
+        fillStyle: bandStyle,
+        strokeStyle,
+        lineWidth: 1.5,
+      },
+    };
+    const parts = [
+      Bodies.circle(x, y, radius, capOptions),
+      Bodies.rectangle(x, y, radius * 1.45, thickness * 0.48, bandOptions),
+      Bodies.rectangle(x, y, thickness * 0.48, radius * 1.45, bandOptions),
+      Bodies.rectangle(x, y + radius * 0.58, radius * 1.22, thickness * 0.6, capOptions),
+    ];
+    const platform = Body.create({
+      isStatic: true,
+      friction,
+      restitution: WORLD.surfaceRestitution,
+      parts,
+      render: {
+        fillStyle,
+        strokeStyle,
+        lineWidth: 2,
+      },
+    });
+
+    Body.setStatic(platform, true);
+    return platform;
+  }
+
+  function cupBuildMetrics() {
+    const width = render.options.width;
+    const height = render.options.height;
+    const cupScale = WORLD.cupScale;
+    return {
+      worldWidth: width,
+      worldHeight: height,
+      baseWidth: Math.max(110, Math.min(width * 0.3, 230)) * cupScale,
+      baseHeight: WORLD.draggablePlatformHeight * cupScale,
+      thickness: WORLD.platformThickness * cupScale,
+    };
+  }
+
+  function createMovableCupPlatform(layout, state, index, metrics = cupBuildMetrics()) {
+    const cupOptions = {
+      x: state.xRatio * metrics.worldWidth,
+      y: state.yRatio * metrics.worldHeight,
+      width: metrics.baseWidth * layout.widthScale,
+      height: metrics.baseHeight * layout.heightScale,
+      thickness: metrics.thickness,
+      friction: 0.32,
+      fillStyle: layout.fillStyle,
+      strokeStyle: layout.strokeStyle,
+    };
+    let platform;
+
+    if (layout.shape === "round") {
+      platform = createRoundCup({
+        ...cupOptions,
+        startAngle: layout.startAngle,
+        endAngle: layout.endAngle,
+        beadScale: layout.beadScale,
+        holeGaps: layout.holeGaps,
+      });
+    } else if (layout.shape === "polygon") {
+      platform = createPolygonCup({
+        ...cupOptions,
+        points: layout.points,
+      });
+    } else if (layout.shape === "dmac") {
+      platform = createDmacCup({
+        ...cupOptions,
+        pinStyle: layout.pinStyle,
+        busStyle: layout.busStyle,
+      });
+    } else if (layout.shape === "caley") {
+      platform = createCaleyCup({
+        ...cupOptions,
+        sensorStyle: layout.sensorStyle,
+        dataStyle: layout.dataStyle,
+      });
+    } else if (layout.shape === "plug") {
+      platform = createPlug({
+        ...cupOptions,
+        bandStyle: layout.bandStyle,
+      });
+    } else {
+      platform = createUPlatform({
+        ...cupOptions,
+        bottomGaps: layout.bottomGaps,
+        leftSideGaps: layout.leftSideGaps,
+        rightSideGaps: layout.rightSideGaps,
+        sideLean: layout.sideLean,
+      });
+    }
+
+    platform.cupIndex = index;
+    platform.toolType = layout.shape || "cup";
+    Body.setAngle(platform, state.angle);
+    return platform;
+  }
+
+  function syncCupStateFromPlatform(platform) {
+    if (!platform || platform.cupIndex === undefined) {
+      return;
+    }
+
+    const state = spawnedCupStates[platform.cupIndex];
+    if (!state) {
+      return;
+    }
+
+    state.xRatio = clamp(platform.position.x / render.options.width, 0, 1);
+    state.yRatio = clamp(platform.position.y / render.options.height, 0, 1);
+    state.angle = platform.angle;
+  }
+
+  function plugLayoutIndex() {
+    return MOVABLE_CUP_LAYOUTS.findIndex((layout) => layout.shape === "plug");
+  }
+
+  function drainPlugState() {
+    const layoutIndex = plugLayoutIndex();
+    return {
+      layoutIndex,
+      xRatio: 0.5,
+      yRatio: 0.985,
+      angle: 0,
+      lockedToDrain: true,
+    };
+  }
+
+  function nextCupSpawnState(layoutIndex) {
+    const layout = MOVABLE_CUP_LAYOUTS[layoutIndex];
+    const spawnSlots = [
+      { xRatio: 0.18, yRatio: 0.24 },
+      { xRatio: 0.32, yRatio: 0.26 },
+      { xRatio: 0.46, yRatio: 0.24 },
+      { xRatio: 0.6, yRatio: 0.26 },
+      { xRatio: 0.74, yRatio: 0.24 },
+      { xRatio: 0.88, yRatio: 0.3 },
+    ];
+    const slot = spawnSlots[spawnedCupStates.length % spawnSlots.length];
+    const rowOffset = Math.floor(spawnedCupStates.length / spawnSlots.length) * 0.08;
+
+    return {
+      layoutIndex,
+      xRatio: slot.xRatio,
+      yRatio: clamp(slot.yRatio + rowOffset, 0.16, 0.78),
+      angle: layout.angle || 0,
+    };
+  }
+
+  function spawnCupFromDrawer(layoutIndex) {
+    const layout = MOVABLE_CUP_LAYOUTS[layoutIndex];
+    if (!layout) {
+      return;
+    }
+
+    const state = nextCupSpawnState(layoutIndex);
+    const index = spawnedCupStates.length;
+    spawnedCupStates.push(state);
+
+    const platform = createMovableCupPlatform(layout, state, index);
+    draggablePlatforms.push(platform);
+    Composite.add(engine.world, platform);
+    setActiveDraggablePlatform(platform);
+    registerScoringSurfaces();
+  }
+
+  function removeSelectedCup() {
+    const platform = activeDraggablePlatform;
+    if (!platform || platform.cupIndex === undefined) {
+      return;
+    }
+
+    const index = platform.cupIndex;
+    spawnedCupStates.splice(index, 1);
+    draggablePlatforms.splice(index, 1);
+    Composite.remove(engine.world, platform);
+
+    draggablePlatforms.forEach((body, nextIndex) => {
+      body.cupIndex = nextIndex;
+    });
+
+    if (activePointerId !== null && isDraggingPlatform) {
+      isDraggingPlatform = false;
+      dragOffset = { x: 0, y: 0 };
+      dragTarget = null;
+    }
+
+    activeDraggableIndex = clamp(index - 1, 0, draggablePlatforms.length - 1);
+    activeDraggablePlatform = draggablePlatforms[activeDraggableIndex] || null;
+    registerScoringSurfaces();
+  }
+
+  function buildCupDrawer() {
+    if (!cupList) {
+      return;
+    }
+
+    cupList.textContent = "";
+    const removeButton = document.createElement("button");
+    const removeSwatch = document.createElement("span");
+    const removeLabel = document.createElement("span");
+
+    removeButton.type = "button";
+    removeButton.className = "cup-button cup-remove-button";
+    removeButton.title = "Remove selected cup or tool";
+    removeSwatch.className = "cup-swatch";
+    removeLabel.textContent = "Remove Selected";
+    removeButton.append(removeSwatch, removeLabel);
+    removeButton.addEventListener("click", removeSelectedCup);
+    cupList.appendChild(removeButton);
+
+    MOVABLE_CUP_LAYOUTS.forEach((layout, index) => {
+      if (layout.drawer === false) {
+        return;
+      }
+
+      const button = document.createElement("button");
+      const swatch = document.createElement("span");
+      const label = document.createElement("span");
+
+      button.type = "button";
+      button.className = "cup-button";
+      button.title = `Spawn ${layout.label || layout.id}`;
+      swatch.className = "cup-swatch";
+      swatch.style.background = layout.fillStyle;
+      label.textContent = layout.label || layout.id;
+
+      button.append(swatch, label);
+      button.addEventListener("click", () => spawnCupFromDrawer(index));
+      cupList.appendChild(button);
+    });
+  }
+
   function buildWorld() {
     removeWorldBodies();
 
@@ -1163,16 +2014,65 @@
     const height = window.innerHeight;
     const wt = WORLD.wallThickness;
 
-    const floor = Bodies.rectangle(
-      width / 2,
+    const drainWidth = Math.max(70, Math.min(WORLD.drainWidth, width * 0.28));
+    const drainX = width / 2;
+    const floorTop = height;
+    const floorBottom = height + WORLD.floorHeight;
+    const floorOptions = {
+      isStatic: true,
+      friction: 0.25,
+      restitution: WORLD.surfaceRestitution,
+      render: { fillStyle: "#5f7f93" },
+    };
+    const leftFloorStart = -wt;
+    const leftFloorEnd = drainX - drainWidth / 2;
+    const rightFloorStart = drainX + drainWidth / 2;
+    const rightFloorEnd = width + wt;
+    const leftFloor = Bodies.rectangle(
+      (leftFloorStart + leftFloorEnd) / 2,
       height + WORLD.floorHeight / 2,
-      width + wt * 2,
+      leftFloorEnd - leftFloorStart,
       WORLD.floorHeight,
+      floorOptions
+    );
+    const rightFloor = Bodies.rectangle(
+      (rightFloorStart + rightFloorEnd) / 2,
+      height + WORLD.floorHeight / 2,
+      rightFloorEnd - rightFloorStart,
+      WORLD.floorHeight,
+      floorOptions
+    );
+    const drainLipOptions = {
+      isStatic: true,
+      friction: 0.25,
+      restitution: WORLD.surfaceRestitution,
+      render: { fillStyle: "#233f55" },
+    };
+    const drainLeftLip = Bodies.rectangle(
+      leftFloorEnd,
+      floorTop + WORLD.floorHeight * 0.18,
+      12,
+      WORLD.floorHeight * 0.36,
+      drainLipOptions
+    );
+    const drainRightLip = Bodies.rectangle(
+      rightFloorStart,
+      floorTop + WORLD.floorHeight * 0.18,
+      12,
+      WORLD.floorHeight * 0.36,
+      drainLipOptions
+    );
+    drainSensor = Bodies.rectangle(
+      drainX,
+      floorBottom - WORLD.floorHeight * 0.12,
+      drainWidth * 0.9,
+      WORLD.floorHeight * 0.5,
       {
         isStatic: true,
-        friction: 0.25,
-        restitution: WORLD.surfaceRestitution,
-        render: { fillStyle: "#5f7f93" },
+        isSensor: true,
+        render: {
+          visible: false,
+        },
       }
     );
 
@@ -1189,35 +2089,44 @@
     });
 
     const platformY = height * (2 / 3);
-    const platformWidth = Math.max(180, Math.min(width * 0.62, 500));
+    const cupScale = WORLD.cupScale;
+    const platformThickness = WORLD.platformThickness * cupScale;
+    const platformWidth = Math.max(180, Math.min(width * 0.62, 500)) * cupScale;
+    const stationaryPlatformBaseHeight = WORLD.stationaryPlatformHeight * cupScale;
+    const stationaryPlatformHeight = stationaryPlatformBaseHeight * 3;
+    const stationaryPlatformY =
+      platformY - (stationaryPlatformHeight - stationaryPlatformBaseHeight) / 2;
 
     centerPlatform = createUPlatform({
       x: width / 2,
-      y: platformY,
+      y: stationaryPlatformY,
       width: platformWidth,
-      height: WORLD.stationaryPlatformHeight,
-      thickness: WORLD.platformThickness,
-      bottomGap: WORLD.stationaryBottomHoleWidth,
+      height: stationaryPlatformHeight,
+      thickness: platformThickness,
+      bottomGap: WORLD.stationaryBottomHoleWidth * cupScale,
       friction: 0.35,
       fillStyle: "#e0bc7a",
       strokeStyle: "#f6dbab",
     });
 
-    const draggableWidth = Math.max(110, Math.min(width * 0.3, 230));
-    draggablePlatform = createUPlatform({
-      x: width * 0.72,
-      y: height * 0.44,
-      width: draggableWidth,
-      height: WORLD.draggablePlatformHeight,
-      thickness: WORLD.platformThickness,
-      friction: 0.32,
-      fillStyle: "#8fb9ff",
-      strokeStyle: "#d7e5ff",
-    });
-    Body.setAngle(draggablePlatform, draggableTiltAngle);
+    const metrics = cupBuildMetrics();
+    draggablePlatforms = spawnedCupStates
+      .map((state, index) => {
+        const layout = MOVABLE_CUP_LAYOUTS[state.layoutIndex];
+        return layout ? createMovableCupPlatform(layout, state, index, metrics) : null;
+      })
+      .filter(Boolean);
+    activeDraggableIndex = clamp(activeDraggableIndex, 0, draggablePlatforms.length - 1);
+    activeDraggablePlatform = draggablePlatforms[activeDraggableIndex] || null;
 
-    boundaries = [floor, leftWall, rightWall];
-    Composite.add(engine.world, [...boundaries, centerPlatform, draggablePlatform]);
+    boundaries = [leftFloor, rightFloor, drainLeftLip, drainRightLip, leftWall, rightWall];
+    Composite.add(engine.world, [
+      ...boundaries,
+      drainSensor,
+      centerPlatform,
+      ...draggablePlatforms,
+    ]);
+    registerScoringSurfaces();
   }
 
   function setWorldSurfaceRestitution(value) {
@@ -1234,12 +2143,20 @@
       });
     }
 
-    if (draggablePlatform) {
-      draggablePlatform.restitution = value;
-      draggablePlatform.parts.forEach((part) => {
+    draggablePlatforms.forEach((platform) => {
+      platform.restitution = value;
+      platform.parts.forEach((part) => {
         part.restitution = value;
       });
-    }
+    });
+  }
+
+  function setWaterRestitution(value) {
+    WATER.restitution = value;
+
+    waterBodies.forEach((body) => {
+      body.restitution = value;
+    });
   }
 
   function applyParticleRenderState(body) {
@@ -1286,11 +2203,12 @@
   }
 
   function sampleMetaballBodies() {
-    const sampled = [];
+    metaballSampleBuffer.length = 0;
     const width = render.options.width;
     const height = render.options.height;
     const margin = METABALLS.cullMargin;
     const maxParticles = Math.max(1, Math.round(METABALLS.maxParticles));
+    let visibleCount = 0;
 
     for (let i = 0; i < waterBodies.length; i += 1) {
       const body = waterBodies[i];
@@ -1300,20 +2218,38 @@
         continue;
       }
 
-      sampled.push(body);
+      visibleCount += 1;
     }
 
-    if (sampled.length <= maxParticles) {
-      return sampled;
+    if (visibleCount === 0) {
+      return metaballSampleBuffer;
     }
 
-    const step = sampled.length / maxParticles;
-    const reduced = new Array(maxParticles);
-    for (let i = 0; i < maxParticles; i += 1) {
-      reduced[i] = sampled[Math.floor(i * step)];
+    const step = Math.max(1, visibleCount / maxParticles);
+    let visibleIndex = 0;
+    let nextSampleIndex = 0;
+
+    for (let i = 0; i < waterBodies.length; i += 1) {
+      const body = waterBodies[i];
+      const { x, y } = body.position;
+
+      if (x < -margin || x > width + margin || y < -margin || y > height + margin) {
+        continue;
+      }
+
+      if (visibleCount <= maxParticles || visibleIndex >= Math.floor(nextSampleIndex)) {
+        metaballSampleBuffer.push(body);
+        nextSampleIndex += step;
+
+        if (metaballSampleBuffer.length >= maxParticles) {
+          break;
+        }
+      }
+
+      visibleIndex += 1;
     }
 
-    return reduced;
+    return metaballSampleBuffer;
   }
 
   function buildMetaballField(sampledBodies) {
@@ -1577,11 +2513,6 @@
     return Math.max(min, Math.min(max, value));
   }
 
-  function wrapAngle(angle) {
-    const fullTurn = Math.PI * 2;
-    return ((angle % fullTurn) + fullTurn) % fullTurn;
-  }
-
   function isPointInsideBody(point, body) {
     if (!body) {
       return false;
@@ -1601,13 +2532,32 @@
     return Bounds.contains(body.bounds, point) && Vertices.contains(body.vertices, point);
   }
 
-  function clampedDraggablePlatformPosition(pointerWorldPoint) {
-    if (!draggablePlatform) {
+  function findDraggablePlatformAtPoint(point) {
+    for (let i = draggablePlatforms.length - 1; i >= 0; i -= 1) {
+      if (isPointInsideBody(point, draggablePlatforms[i])) {
+        return draggablePlatforms[i];
+      }
+    }
+
+    return null;
+  }
+
+  function setActiveDraggablePlatform(platform) {
+    if (!platform) {
+      return;
+    }
+
+    activeDraggablePlatform = platform;
+    activeDraggableIndex = platform.cupIndex || 0;
+  }
+
+  function clampedDraggablePlatformPosition(pointerWorldPoint, platform = activeDraggablePlatform) {
+    if (!platform) {
       return null;
     }
 
-    const halfWidth = (draggablePlatform.bounds.max.x - draggablePlatform.bounds.min.x) / 2;
-    const halfHeight = (draggablePlatform.bounds.max.y - draggablePlatform.bounds.min.y) / 2;
+    const halfWidth = (platform.bounds.max.x - platform.bounds.min.x) / 2;
+    const halfHeight = (platform.bounds.max.y - platform.bounds.min.y) / 2;
 
     const x = clamp(
       pointerWorldPoint.x - dragOffset.x,
@@ -1615,10 +2565,14 @@
       render.options.width - halfWidth - 10
     );
 
+    const maxY =
+      platform.toolType === "plug"
+        ? render.options.height + halfHeight * 0.15
+        : render.options.height - halfHeight - 10;
     const y = clamp(
       pointerWorldPoint.y - dragOffset.y,
       halfHeight + 10,
-      render.options.height - halfHeight - 10
+      maxY
     );
 
     return { x, y };
@@ -1628,68 +2582,281 @@
     dragTarget = clampedDraggablePlatformPosition(pointerWorldPoint);
   }
 
-  function settleDraggablePlatform() {
-    if (!draggablePlatform) {
+  function draggablePlatformCollidesWithCup(platform) {
+    if (!platform || !centerPlatform) {
+      return false;
+    }
+
+    const otherCups = draggablePlatforms.filter((candidate) => candidate !== platform);
+    return Query.collides(platform, [centerPlatform, ...otherCups]).length > 0;
+  }
+
+  function canPlaceDraggablePlatform(
+    platform,
+    position,
+    angle = platform ? platform.angle : 0
+  ) {
+    if (!platform) {
+      return false;
+    }
+
+    const previousPosition = { ...platform.position };
+    const previousAngle = platform.angle;
+
+    Body.setPosition(platform, position, false);
+    Body.setAngle(platform, angle, false);
+    const hasCupCollision = draggablePlatformCollidesWithCup(platform);
+    Body.setAngle(platform, previousAngle, false);
+    Body.setPosition(platform, previousPosition, false);
+
+    return !hasCupCollision;
+  }
+
+  function safeDraggablePlatformTransform(
+    platform,
+    targetPosition,
+    targetAngle = platform ? platform.angle : 0
+  ) {
+    if (!platform || !targetPosition) {
+      return null;
+    }
+
+    const startPosition = { ...platform.position };
+    const startAngle = platform.angle;
+    const dx = targetPosition.x - startPosition.x;
+    const dy = targetPosition.y - startPosition.y;
+    const angleDelta = targetAngle - startAngle;
+    const distance = Math.hypot(dx, dy);
+    const maxTranslationStep = Math.max(1, WORLD.draggableCollisionStep);
+    const maxAngleStep = Math.max(0.001, WORLD.draggableCollisionAngleStep);
+    const steps = Math.max(
+      1,
+      Math.ceil(distance / maxTranslationStep),
+      Math.ceil(Math.abs(angleDelta) / maxAngleStep)
+    );
+    let safePosition = startPosition;
+    let safeAngle = startAngle;
+
+    for (let i = 1; i <= steps; i += 1) {
+      const t = i / steps;
+      const candidatePosition = {
+        x: startPosition.x + dx * t,
+        y: startPosition.y + dy * t,
+      };
+      const candidateAngle = startAngle + angleDelta * t;
+
+      if (!canPlaceDraggablePlatform(platform, candidatePosition, candidateAngle)) {
+        break;
+      }
+
+      safePosition = candidatePosition;
+      safeAngle = candidateAngle;
+    }
+
+    return {
+      position: safePosition,
+      angle: safeAngle,
+      moved:
+        Math.hypot(safePosition.x - startPosition.x, safePosition.y - startPosition.y) > 0.001 ||
+        Math.abs(safeAngle - startAngle) > 0.0001,
+    };
+  }
+
+  function settleDraggablePlatform(platform = activeDraggablePlatform) {
+    if (!platform) {
       return;
     }
 
-    Body.setVelocity(draggablePlatform, { x: 0, y: 0 });
-    Body.setAngularVelocity(draggablePlatform, 0);
-    draggableTiltAngle = draggablePlatform.angle;
+    Body.setVelocity(platform, { x: 0, y: 0 });
+    Body.setAngularVelocity(platform, 0);
+    syncCupStateFromPlatform(platform);
   }
 
   function stepDraggablePlatform() {
-    if (!isDraggingPlatform || !draggablePlatform || !dragTarget) {
+    const platform = activeDraggablePlatform;
+    if (!isDraggingPlatform || !platform || !dragTarget) {
       return;
     }
 
-    const dx = dragTarget.x - draggablePlatform.position.x;
-    const dy = dragTarget.y - draggablePlatform.position.y;
+    const dx = dragTarget.x - platform.position.x;
+    const dy = dragTarget.y - platform.position.y;
     const distance = Math.hypot(dx, dy);
 
     if (distance < 0.001) {
-      settleDraggablePlatform();
+      settleDraggablePlatform(platform);
       return;
     }
 
     const maxStep = Math.max(1, WORLD.draggableMaxStep);
     const scale = Math.min(1, maxStep / distance);
     const nextPosition = {
-      x: draggablePlatform.position.x + dx * scale,
-      y: draggablePlatform.position.y + dy * scale,
+      x: platform.position.x + dx * scale,
+      y: platform.position.y + dy * scale,
     };
 
-    Body.setPosition(draggablePlatform, nextPosition, true);
-    Body.setAngularVelocity(draggablePlatform, 0);
+    const safeTransform = safeDraggablePlatformTransform(platform, nextPosition);
+    if (!safeTransform || !safeTransform.moved) {
+      settleDraggablePlatform(platform);
+      return;
+    }
+
+    Body.setPosition(platform, safeTransform.position, true);
+    Body.setAngularVelocity(platform, 0);
+    syncCupStateFromPlatform(platform);
   }
 
   function stepDraggablePlatformTilt(deltaMs) {
-    if (!draggablePlatform || tiltInput === 0) {
+    const platform = activeDraggablePlatform;
+    if (!platform || tiltInput === 0) {
       return;
     }
 
     const dt = Math.min(Math.max(deltaMs || 1000 / 60, 0), 34) / 1000;
-    const nextAngle = wrapAngle(draggablePlatform.angle + tiltInput * WORLD.draggableTiltRate * dt);
+    const nextAngle = platform.angle + tiltInput * WORLD.draggableTiltRate * dt;
 
-    draggableTiltAngle = nextAngle;
-    Body.setAngle(draggablePlatform, nextAngle, true);
+    const safeTransform = safeDraggablePlatformTransform(platform, platform.position, nextAngle);
+    if (!safeTransform || !safeTransform.moved) {
+      Body.setAngularVelocity(platform, 0);
+      syncCupStateFromPlatform(platform);
+      return;
+    }
+
+    Body.setAngle(platform, safeTransform.angle, true);
+    syncCupStateFromPlatform(platform);
+  }
+
+  function rootCollisionBody(body) {
+    return body && body.parent ? body.parent : body;
+  }
+
+  function addScore(points) {
+    score += points;
+  }
+
+  function scoreParticleCupTouch(body) {
+    if (!body.scoreState || body.scoreState.touchedCup) {
+      return;
+    }
+
+    body.scoreState.touchedCup = true;
+    addScore(SCORE_VALUES.cupTouch);
+  }
+
+  function scoreParticleEnvironmentTouch(body) {
+    if (!body.scoreState || body.scoreState.touchedEnvironment) {
+      return;
+    }
+
+    body.scoreState.touchedEnvironment = true;
+    addScore(SCORE_VALUES.environmentTouch);
+  }
+
+  function scoreParticleSplash(bodyA, bodyB) {
+    if (!bodyA.scoreState || !bodyB.scoreState) {
+      return;
+    }
+
+    if (
+      bodyA.scoreState.splashes >= SCORE_VALUES.maxSplashesPerDrop ||
+      bodyB.scoreState.splashes >= SCORE_VALUES.maxSplashesPerDrop
+    ) {
+      return;
+    }
+
+    bodyA.scoreState.splashes += 1;
+    bodyB.scoreState.splashes += 1;
+    addScore(SCORE_VALUES.particleSplash);
+  }
+
+  function scoreCollisionPair(bodyA, bodyB) {
+    const rootA = rootCollisionBody(bodyA);
+    const rootB = rootCollisionBody(bodyB);
+    const aIsWater = waterBodySet.has(rootA);
+    const bIsWater = waterBodySet.has(rootB);
+
+    if (aIsWater && bIsWater) {
+      scoreParticleSplash(rootA, rootB);
+      return;
+    }
+
+    const waterBody = aIsWater ? rootA : bIsWater ? rootB : null;
+    const otherBody = aIsWater ? rootB : bIsWater ? rootA : null;
+    if (!waterBody || !otherBody) {
+      return;
+    }
+
+    if (cupBodySet.has(otherBody)) {
+      scoreParticleCupTouch(waterBody);
+    } else if (environmentBodySet.has(otherBody)) {
+      scoreParticleEnvironmentTouch(waterBody);
+    }
+  }
+
+  function queueBlackHoleDeletion(bodyA, bodyB) {
+    const rootA = rootCollisionBody(bodyA);
+    const rootB = rootCollisionBody(bodyB);
+    const aIsBlackHole = blackHoleBodySet.has(rootA);
+    const bIsBlackHole = blackHoleBodySet.has(rootB);
+
+    if (aIsBlackHole && waterBodySet.has(rootB)) {
+      blackHoleDeletionQueue.add(rootB);
+    } else if (bIsBlackHole && waterBodySet.has(rootA)) {
+      blackHoleDeletionQueue.add(rootA);
+    }
+  }
+
+  function removeWaterBody(body) {
+    const index = waterBodies.indexOf(body);
+    if (index === -1) {
+      return;
+    }
+
+    removeWaterBodies(index, 1);
+  }
+
+  function removeQueuedBlackHoleParticles() {
+    if (blackHoleDeletionQueue.size === 0) {
+      return;
+    }
+
+    blackHoleDeletionQueue.forEach((body) => removeWaterBody(body));
+    blackHoleDeletionQueue.clear();
+  }
+
+  function removeWaterBodies(startIndex, deleteCount) {
+    if (deleteCount <= 0) {
+      return;
+    }
+
+    const removed = waterBodies.splice(startIndex, deleteCount);
+    for (let i = 0; i < removed.length; i += 1) {
+      waterBodySet.delete(removed[i]);
+      Composite.remove(engine.world, removed[i]);
+    }
+  }
+
+  function trimWaterBodiesToLimit(incomingCount = 0) {
+    const maxBodies = Math.max(1, Math.round(WATER.maxBodies));
+    const overage = waterBodies.length + incomingCount - maxBodies;
+    if (overage <= 0) {
+      return;
+    }
+
+    const batchSize = Math.max(1, Math.round(WATER.cullBatchSize));
+    removeWaterBodies(0, Math.min(waterBodies.length, Math.max(overage, batchSize)));
   }
 
   function spawnDrop(sourceX, sourceY) {
-    const maxBodies = Math.max(1, Math.round(WATER.maxBodies));
-    if (waterBodies.length >= maxBodies) {
-      const removed = waterBodies.shift();
-      if (removed) {
-        Composite.remove(engine.world, removed);
-      }
-    }
+    trimWaterBodiesToLimit(1);
 
     const radiusMin = Math.min(WATER.dropRadiusMin, WATER.dropRadiusMax);
     const radiusMax = Math.max(WATER.dropRadiusMin, WATER.dropRadiusMax);
     const radius = radiusMin + Math.random() * Math.max(radiusMax - radiusMin, 0.0001);
-    const body = Bodies.circle(
+    const particleSides = Math.max(5, Math.min(10, Math.round(WATER.particleSides)));
+    const body = Bodies.polygon(
       sourceX + (Math.random() - 0.5) * WATER.spawnSpreadX,
       sourceY + WATER.spawnOffsetY + (Math.random() - 0.5) * WATER.spawnSpreadY,
+      particleSides,
       radius,
       {
         restitution: WATER.restitution,
@@ -1701,6 +2868,12 @@
         render: {},
       }
     );
+    body.circleRadius = radius;
+    body.scoreState = {
+      touchedCup: false,
+      touchedEnvironment: false,
+      splashes: 0,
+    };
 
     applyParticleRenderState(body);
 
@@ -1710,9 +2883,8 @@
     });
 
     waterBodies.push(body);
+    waterBodySet.add(body);
     Composite.add(engine.world, body);
-
-    totalDrops += 1;
   }
 
   function updateHudStats(now = performance.now()) {
@@ -1722,7 +2894,7 @@
 
     lastHudUpdate = now;
     const fpsValue = smoothedFps > 0 ? Math.round(smoothedFps) : "--";
-    stats.textContent = `drops: ${totalDrops} | fps: ${fpsValue}`;
+    stats.textContent = `score: ${score} | drops: ${waterBodies.length} | fps: ${fpsValue}`;
   }
 
   function startPour(evt) {
@@ -1733,15 +2905,17 @@
     }
 
     const pointerWorldPoint = worldPointFromEvent(evt);
-    if (isPointInsideBody(pointerWorldPoint, draggablePlatform)) {
+    const selectedPlatform = findDraggablePlatformAtPoint(pointerWorldPoint);
+    if (selectedPlatform) {
+      setActiveDraggablePlatform(selectedPlatform);
       isDraggingPlatform = true;
       isPouring = false;
       activePointerId = evt.pointerId;
       dragOffset = {
-        x: pointerWorldPoint.x - draggablePlatform.position.x,
-        y: pointerWorldPoint.y - draggablePlatform.position.y,
+        x: pointerWorldPoint.x - selectedPlatform.position.x,
+        y: pointerWorldPoint.y - selectedPlatform.position.y,
       };
-      dragTarget = clampedDraggablePlatformPosition(pointerWorldPoint);
+      dragTarget = clampedDraggablePlatformPosition(pointerWorldPoint, selectedPlatform);
       canvas.setPointerCapture(evt.pointerId);
       return;
     }
@@ -1843,8 +3017,18 @@
     stepDraggablePlatformTilt(event.delta);
   });
 
+  Events.on(engine, "collisionStart", (event) => {
+    const pairs = event.pairs;
+    for (let i = 0; i < pairs.length; i += 1) {
+      queueBlackHoleDeletion(pairs[i].bodyA, pairs[i].bodyB);
+      scoreCollisionPair(pairs[i].bodyA, pairs[i].bodyB);
+    }
+  });
+
   // Remove particles that drift too far below/above the playable area.
   Events.on(engine, "afterUpdate", () => {
+    removeQueuedBlackHoleParticles();
+
     const width = render.options.width;
     const height = render.options.height;
 
@@ -1852,6 +3036,7 @@
       const body = waterBodies[i];
       const { x, y } = body.position;
       if (x < -160 || x > width + 160 || y > height + 320 || y < -320) {
+        waterBodySet.delete(body);
         Composite.remove(engine.world, body);
         waterBodies.splice(i, 1);
       }
@@ -1878,6 +3063,8 @@
   resizeFluidBuffers();
   syncViewMode();
   buildControlsPanel();
+  buildCupDrawer();
+  spawnedCupStates.push(drainPlugState());
   buildWorld();
   requestAnimationFrame(tick);
 })();
