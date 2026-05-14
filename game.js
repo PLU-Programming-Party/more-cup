@@ -21,7 +21,7 @@
   const controlsList = document.getElementById("controls-list");
 
   const VIEW = {
-    particlesOnly: false,
+    particlesOnly: true,
     showBoth: false,
   };
 
@@ -39,48 +39,52 @@
   };
 
   const WATER = {
-    gravityY: 1.1,
-    solverPositionIterations: 6,
+    gravityY: 2.55,
+    solverPositionIterations: 8,
     solverVelocityIterations: 4,
-    emissionRate: 170,
-    maxBodies: 10000,
+    emissionRate: 97,
+    maxBodies: 12000,
     cullBatchSize: 96,
     particleSides: 7,
-    dropRadiusMin: 4,
-    dropRadiusMax: 6.7,
+    dropRadiusMin: 6,
+    dropRadiusMax: 5,
     spawnSpreadX: 7,
     spawnSpreadY: 4,
     spawnOffsetY: -10,
-    restitution: 0.58,
-    friction: 0.01,
+    restitution: 0,
+    friction: 0,
     frictionStatic: 0,
-    frictionAir: 0.004,
-    density: 0.0012,
-    slop: 0.01,
+    frictionAir: 0,
+    density: 0.0098,
+    slop: 0.082,
     velocityXRange: 0.6,
     velocityYMax: 0.2,
+    repulsionRadius: 3.0,
+    repulsionStrength: 0.0012,
+    repulsionGridSize: 40,
+    cupDamping: 0.92,
   };
 
   const METABALLS = {
     cellSize: 12,
-    threshold: 1,
-    influenceScale: 6.4,
-    maxParticles: 420,
-    cullMargin: 140,
-    fillHue: 198,
-    fillSaturation: 93,
-    fillLightness: 65,
+    threshold: 3,
+    influenceScale: 3.3,
+    maxParticles: 1200,
+    cullMargin: 156,
+    fillHue: 190,
+    fillSaturation: 78,
+    fillLightness: 54,
     fillAlpha: 0.72,
-    edgeHue: 194,
-    edgeSaturation: 100,
+    edgeHue: 32,
+    edgeSaturation: 0,
     edgeLightness: 84,
-    edgeAlpha: 0.38,
+    edgeAlpha: 0,
     glowHue: 196,
     glowSaturation: 95,
     glowLightness: 55,
     glowAlpha: 0.35,
     glowBlur: 16,
-    edgeWidth: 1.2,
+    edgeWidth: 0,
     fillStyle: "",
     edgeStyle: "",
     glowStyle: "",
@@ -93,13 +97,14 @@
     platformThickness: 24,
     stationaryPlatformHeight: 130,
     draggablePlatformHeight: 250,
-    stationaryBottomHoleWidth: 90,
+    stationaryBottomHoleWidth: 43,
     draggableMaxStep: 14,
     draggableTiltRate: 3.4,
     draggableCollisionStep: 3,
     draggableCollisionAngleStep: 0.035,
     drainWidth: 125,
-    surfaceRestitution: 0.46,
+    surfaceRestitution: 0,
+    keyMoveSpeed: 240,
   };
 
   const MOVABLE_CUP_LAYOUTS = [
@@ -257,29 +262,46 @@
 
   const CONTROL_HELP = {
     "particles-only": "Render only the circle particles and hide blobs.",
-    "show-both": "Render circle particles and keep blobs visible with extra translucency.",
-    "gravity-y": "Controls downward pull on particles. Higher values make liquid fall faster.",
-    "solver-position-iters": "How many position solver passes run per step. Higher values reduce overlap and improve stability.",
-    "solver-velocity-iters": "How many velocity solver passes run per step. Higher values improve collision response.",
+    "show-both":
+      "Render circle particles and keep blobs visible with extra translucency.",
+    "gravity-y":
+      "Controls downward pull on particles. Higher values make liquid fall faster.",
+    "solver-position-iters":
+      "How many position solver passes run per step. Higher values reduce overlap and improve stability.",
+    "solver-velocity-iters":
+      "How many velocity solver passes run per step. Higher values improve collision response.",
     "emission-rate": "Particles spawned per second while pouring.",
-    "max-bodies": "Maximum active water particles. Oldest particles are removed after this cap.",
+    "max-bodies":
+      "Maximum active water particles. Oldest particles are removed after this cap.",
     "drop-radius-min": "Minimum radius for newly spawned particles.",
     "drop-radius-max": "Maximum radius for newly spawned particles.",
-    "spawn-spread-x": "Horizontal spread around the pointer when spawning new particles.",
+    "spawn-spread-x":
+      "Horizontal spread around the pointer when spawning new particles.",
     "spawn-spread-y": "Vertical spawn jitter for new particles.",
     "spawn-offset-y": "Vertical offset from the pointer for spawn position.",
     restitution: "How bouncy each water particle is when it collides.",
     "surface-restitution": "How bouncy the floor, walls, and platform are.",
-    friction: "Sliding resistance during contact. Higher values make particles drag along surfaces.",
+    friction:
+      "Sliding resistance during contact. Higher values make particles drag along surfaces.",
     "friction-static": "Initial stickiness before motion begins on contact.",
-    "friction-air": "Air drag while particles move. Higher values damp motion faster.",
+    "friction-air":
+      "Air drag while particles move. Higher values damp motion faster.",
     density: "Particle mass density. Higher values increase collision weight.",
     slop: "Allowed penetration tolerance in collisions. Lower values are tighter but can be jittery.",
     "velocity-x": "Random horizontal launch speed for newly spawned particles.",
     "velocity-y": "Random downward launch speed for newly spawned particles.",
-    "stationary-bottom-hole": "Width of the opening in the stationary platform's bottom.",
-    "cell-size": "Grid resolution used by metaballs. Smaller cells look smoother but cost more performance.",
-    threshold: "Iso-surface cutoff for the metaballs field. Lower values create thicker liquid.",
+    "repulsion-radius":
+      "Multiplier on particle radius for repulsion range. Higher values push particles apart over a wider area, making liquid look fuller.",
+    "repulsion-strength":
+      "Force magnitude of inter-particle repulsion. Higher values push particles apart more aggressively.",
+    "cup-damping":
+      "Velocity damping applied to particles inside the active cup. Lower values = stronger damping (0 = freeze, 1 = no damping).",
+    "stationary-bottom-hole":
+      "Width of the opening in the stationary platform's bottom.",
+    "cell-size":
+      "Grid resolution used by metaballs. Smaller cells look smoother but cost more performance.",
+    threshold:
+      "Iso-surface cutoff for the metaballs field. Lower values create thicker liquid.",
     "influence-scale": "How far each particle influences the metaballs field.",
     "max-particles": "Maximum particles sampled for overlay rendering.",
     "cull-margin": "Extra offscreen margin included in metaball rendering.",
@@ -361,6 +383,7 @@
   let dragTarget = null;
   let tiltInput = 0;
   const tiltKeys = { left: false, right: false };
+  const moveKeys = { up: false, down: false, left: false, right: false };
   let pourPoint = { x: window.innerWidth / 2, y: 80 };
   let emitAccumulator = 0;
   let score = 0;
@@ -407,100 +430,244 @@
         1,
         20,
         WATER.solverPositionIterations,
-        true
+        true,
       );
       WATER.solverVelocityIterations = clampNumber(
         savedWater.solverVelocityIterations,
         1,
         20,
         WATER.solverVelocityIterations,
-        true
+        true,
       );
-      WATER.emissionRate = clampNumber(savedWater.emissionRate, 0, 500, WATER.emissionRate);
-      WATER.maxBodies = clampNumber(savedWater.maxBodies, 200, 30000, WATER.maxBodies, true);
-      WATER.dropRadiusMin = clampNumber(savedWater.dropRadiusMin, 1, 12, WATER.dropRadiusMin);
-      WATER.dropRadiusMax = clampNumber(savedWater.dropRadiusMax, 1, 14, WATER.dropRadiusMax);
-      WATER.spawnSpreadX = clampNumber(savedWater.spawnSpreadX, 0, 24, WATER.spawnSpreadX);
-      WATER.spawnSpreadY = clampNumber(savedWater.spawnSpreadY, 0, 20, WATER.spawnSpreadY);
-      WATER.spawnOffsetY = clampNumber(savedWater.spawnOffsetY, -25, 5, WATER.spawnOffsetY);
-      WATER.restitution = clampNumber(savedWater.restitution, 0, 1, WATER.restitution);
+      WATER.emissionRate = clampNumber(
+        savedWater.emissionRate,
+        0,
+        500,
+        WATER.emissionRate,
+      );
+      WATER.maxBodies = clampNumber(
+        savedWater.maxBodies,
+        200,
+        30000,
+        WATER.maxBodies,
+        true,
+      );
+      WATER.dropRadiusMin = clampNumber(
+        savedWater.dropRadiusMin,
+        1,
+        12,
+        WATER.dropRadiusMin,
+      );
+      WATER.dropRadiusMax = clampNumber(
+        savedWater.dropRadiusMax,
+        1,
+        14,
+        WATER.dropRadiusMax,
+      );
+      WATER.spawnSpreadX = clampNumber(
+        savedWater.spawnSpreadX,
+        0,
+        24,
+        WATER.spawnSpreadX,
+      );
+      WATER.spawnSpreadY = clampNumber(
+        savedWater.spawnSpreadY,
+        0,
+        20,
+        WATER.spawnSpreadY,
+      );
+      WATER.spawnOffsetY = clampNumber(
+        savedWater.spawnOffsetY,
+        -25,
+        5,
+        WATER.spawnOffsetY,
+      );
+      WATER.restitution = clampNumber(
+        savedWater.restitution,
+        0,
+        1,
+        WATER.restitution,
+      );
       WATER.friction = clampNumber(savedWater.friction, 0, 1, WATER.friction);
-      WATER.frictionStatic = clampNumber(savedWater.frictionStatic, 0, 1, WATER.frictionStatic);
-      WATER.frictionAir = clampNumber(savedWater.frictionAir, 0, 0.1, WATER.frictionAir);
-      WATER.density = clampNumber(savedWater.density, 0.0001, 0.01, WATER.density);
+      WATER.frictionStatic = clampNumber(
+        savedWater.frictionStatic,
+        0,
+        1,
+        WATER.frictionStatic,
+      );
+      WATER.frictionAir = clampNumber(
+        savedWater.frictionAir,
+        0,
+        0.1,
+        WATER.frictionAir,
+      );
+      WATER.density = clampNumber(
+        savedWater.density,
+        0.0001,
+        0.01,
+        WATER.density,
+      );
       WATER.slop = clampNumber(savedWater.slop, 0.001, 0.1, WATER.slop);
-      WATER.velocityXRange = clampNumber(savedWater.velocityXRange, 0, 4, WATER.velocityXRange);
-      WATER.velocityYMax = clampNumber(savedWater.velocityYMax, 0, 2, WATER.velocityYMax);
+      WATER.velocityXRange = clampNumber(
+        savedWater.velocityXRange,
+        0,
+        4,
+        WATER.velocityXRange,
+      );
+      WATER.velocityYMax = clampNumber(
+        savedWater.velocityYMax,
+        0,
+        2,
+        WATER.velocityYMax,
+      );
+      WATER.repulsionRadius = clampNumber(
+        savedWater.repulsionRadius,
+        0,
+        8,
+        WATER.repulsionRadius,
+      );
+      WATER.repulsionStrength = clampNumber(
+        savedWater.repulsionStrength,
+        0,
+        0.01,
+        WATER.repulsionStrength,
+      );
+      WATER.cupDamping = clampNumber(
+        savedWater.cupDamping,
+        0,
+        1,
+        WATER.cupDamping,
+      );
     }
 
     const savedMetaballs = parsed.metaballs;
     if (savedMetaballs && typeof savedMetaballs === "object") {
-      METABALLS.cellSize = clampNumber(savedMetaballs.cellSize, 6, 28, METABALLS.cellSize, true);
-      METABALLS.threshold = clampNumber(savedMetaballs.threshold, 0.2, 3, METABALLS.threshold);
+      METABALLS.cellSize = clampNumber(
+        savedMetaballs.cellSize,
+        6,
+        28,
+        METABALLS.cellSize,
+        true,
+      );
+      METABALLS.threshold = clampNumber(
+        savedMetaballs.threshold,
+        0.2,
+        3,
+        METABALLS.threshold,
+      );
       METABALLS.influenceScale = clampNumber(
         savedMetaballs.influenceScale,
         2,
         12,
-        METABALLS.influenceScale
+        METABALLS.influenceScale,
       );
       METABALLS.maxParticles = clampNumber(
         savedMetaballs.maxParticles,
         50,
         3000,
         METABALLS.maxParticles,
-        true
+        true,
       );
-      METABALLS.cullMargin = clampNumber(savedMetaballs.cullMargin, 20, 360, METABALLS.cullMargin, true);
-      METABALLS.fillHue = clampNumber(savedMetaballs.fillHue, 0, 360, METABALLS.fillHue, true);
+      METABALLS.cullMargin = clampNumber(
+        savedMetaballs.cullMargin,
+        20,
+        360,
+        METABALLS.cullMargin,
+        true,
+      );
+      METABALLS.fillHue = clampNumber(
+        savedMetaballs.fillHue,
+        0,
+        360,
+        METABALLS.fillHue,
+        true,
+      );
       METABALLS.fillSaturation = clampNumber(
         savedMetaballs.fillSaturation,
         0,
         100,
         METABALLS.fillSaturation,
-        true
+        true,
       );
       METABALLS.fillLightness = clampNumber(
         savedMetaballs.fillLightness,
         0,
         100,
         METABALLS.fillLightness,
-        true
+        true,
       );
-      METABALLS.fillAlpha = clampNumber(savedMetaballs.fillAlpha, 0, 1, METABALLS.fillAlpha);
-      METABALLS.edgeHue = clampNumber(savedMetaballs.edgeHue, 0, 360, METABALLS.edgeHue, true);
+      METABALLS.fillAlpha = clampNumber(
+        savedMetaballs.fillAlpha,
+        0,
+        1,
+        METABALLS.fillAlpha,
+      );
+      METABALLS.edgeHue = clampNumber(
+        savedMetaballs.edgeHue,
+        0,
+        360,
+        METABALLS.edgeHue,
+        true,
+      );
       METABALLS.edgeSaturation = clampNumber(
         savedMetaballs.edgeSaturation,
         0,
         100,
         METABALLS.edgeSaturation,
-        true
+        true,
       );
       METABALLS.edgeLightness = clampNumber(
         savedMetaballs.edgeLightness,
         0,
         100,
         METABALLS.edgeLightness,
-        true
+        true,
       );
-      METABALLS.edgeAlpha = clampNumber(savedMetaballs.edgeAlpha, 0, 1, METABALLS.edgeAlpha);
-      METABALLS.glowHue = clampNumber(savedMetaballs.glowHue, 0, 360, METABALLS.glowHue, true);
+      METABALLS.edgeAlpha = clampNumber(
+        savedMetaballs.edgeAlpha,
+        0,
+        1,
+        METABALLS.edgeAlpha,
+      );
+      METABALLS.glowHue = clampNumber(
+        savedMetaballs.glowHue,
+        0,
+        360,
+        METABALLS.glowHue,
+        true,
+      );
       METABALLS.glowSaturation = clampNumber(
         savedMetaballs.glowSaturation,
         0,
         100,
         METABALLS.glowSaturation,
-        true
+        true,
       );
       METABALLS.glowLightness = clampNumber(
         savedMetaballs.glowLightness,
         0,
         100,
         METABALLS.glowLightness,
-        true
+        true,
       );
-      METABALLS.glowAlpha = clampNumber(savedMetaballs.glowAlpha, 0, 1, METABALLS.glowAlpha);
-      METABALLS.glowBlur = clampNumber(savedMetaballs.glowBlur, 0, 50, METABALLS.glowBlur);
-      METABALLS.edgeWidth = clampNumber(savedMetaballs.edgeWidth, 0, 4, METABALLS.edgeWidth);
+      METABALLS.glowAlpha = clampNumber(
+        savedMetaballs.glowAlpha,
+        0,
+        1,
+        METABALLS.glowAlpha,
+      );
+      METABALLS.glowBlur = clampNumber(
+        savedMetaballs.glowBlur,
+        0,
+        50,
+        METABALLS.glowBlur,
+      );
+      METABALLS.edgeWidth = clampNumber(
+        savedMetaballs.edgeWidth,
+        0,
+        4,
+        METABALLS.edgeWidth,
+      );
     }
 
     const savedWorld = parsed.world;
@@ -509,14 +676,14 @@
         savedWorld.surfaceRestitution,
         0,
         1,
-        WORLD.surfaceRestitution
+        WORLD.surfaceRestitution,
       );
       WORLD.stationaryBottomHoleWidth = clampNumber(
         savedWorld.stationaryBottomHoleWidth,
         0,
         260,
         WORLD.stationaryBottomHoleWidth,
-        true
+        true,
       );
     }
 
@@ -551,6 +718,9 @@
         slop: WATER.slop,
         velocityXRange: WATER.velocityXRange,
         velocityYMax: WATER.velocityYMax,
+        repulsionRadius: WATER.repulsionRadius,
+        repulsionStrength: WATER.repulsionStrength,
+        cupDamping: WATER.cupDamping,
       },
       metaballs: {
         cellSize: METABALLS.cellSize,
@@ -593,7 +763,9 @@
   function stepPrecision(step) {
     const stepText = String(step);
     const decimalIndex = stepText.indexOf(".");
-    return decimalIndex === -1 ? 0 : Math.min(stepText.length - decimalIndex - 1, 6);
+    return decimalIndex === -1
+      ? 0
+      : Math.min(stepText.length - decimalIndex - 1, 6);
   }
 
   function formatSliderValue(value, step, formatter) {
@@ -632,7 +804,11 @@
     input.title = helpText;
 
     const syncDisplay = () => {
-      value.textContent = formatSliderValue(control.get(), control.step, control.formatter);
+      value.textContent = formatSliderValue(
+        control.get(),
+        control.step,
+        control.formatter,
+      );
     };
 
     input.value = String(control.get());
@@ -989,6 +1165,39 @@
               WATER.velocityYMax = value;
             },
           },
+          {
+            id: "repulsion-radius",
+            label: "repulsion radius",
+            min: 0,
+            max: 8,
+            step: 0.1,
+            get: () => WATER.repulsionRadius,
+            set: (value) => {
+              WATER.repulsionRadius = value;
+            },
+          },
+          {
+            id: "repulsion-strength",
+            label: "repulsion strength",
+            min: 0,
+            max: 0.01,
+            step: 0.0001,
+            get: () => WATER.repulsionStrength,
+            set: (value) => {
+              WATER.repulsionStrength = value;
+            },
+          },
+          {
+            id: "cup-damping",
+            label: "cup damping",
+            min: 0,
+            max: 1,
+            step: 0.01,
+            get: () => WATER.cupDamping,
+            set: (value) => {
+              WATER.cupDamping = value;
+            },
+          },
         ],
       },
       {
@@ -1339,9 +1548,11 @@
 
       const offset = (start + end) / 2;
       const segmentX =
-        centerX + (axis === "x" ? Math.cos(angle) * offset : -Math.sin(angle) * offset);
+        centerX +
+        (axis === "x" ? Math.cos(angle) * offset : -Math.sin(angle) * offset);
       const segmentY =
-        centerY + (axis === "x" ? Math.sin(angle) * offset : Math.cos(angle) * offset);
+        centerY +
+        (axis === "x" ? Math.sin(angle) * offset : Math.cos(angle) * offset);
       const segmentWidth = axis === "x" ? segmentLength : thickness;
       const segmentHeight = axis === "x" ? thickness : segmentLength;
 
@@ -1349,7 +1560,7 @@
         Bodies.rectangle(segmentX, segmentY, segmentWidth, segmentHeight, {
           ...options,
           angle,
-        })
+        }),
       );
     }
   }
@@ -1381,7 +1592,8 @@
 
     const sideHeight = Math.max(thickness * 2, height);
     const bottomHolePattern =
-      bottomGaps || (bottomGap > 0 ? [{ center: 0, width: bottomGap / width }] : []);
+      bottomGaps ||
+      (bottomGap > 0 ? [{ center: 0, width: bottomGap / width }] : []);
     const leftX = x - width / 2 + thickness / 2;
     const rightX = x + width / 2 - thickness / 2;
     const bottomY = y + sideHeight / 2 - thickness / 2;
@@ -1489,9 +1701,14 @@
 
       const angle = arcStart + (arcEnd - arcStart) * t;
       parts.push(
-        Bodies.circle(x + Math.cos(angle) * radiusX, y + Math.sin(angle) * radiusY, beadRadius, {
-          ...partOptions,
-        })
+        Bodies.circle(
+          x + Math.cos(angle) * radiusX,
+          y + Math.sin(angle) * radiusY,
+          beadRadius,
+          {
+            ...partOptions,
+          },
+        ),
       );
     }
 
@@ -1551,10 +1768,16 @@
       }
 
       parts.push(
-        Bodies.rectangle((start.x + end.x) / 2, (start.y + end.y) / 2, length, thickness, {
-          ...partOptions,
-          angle: Math.atan2(dy, dx),
-        })
+        Bodies.rectangle(
+          (start.x + end.x) / 2,
+          (start.y + end.y) / 2,
+          length,
+          thickness,
+          {
+            ...partOptions,
+            angle: Math.atan2(dy, dx),
+          },
+        ),
       );
     }
 
@@ -1634,8 +1857,20 @@
       const t = pinCount === 1 ? 0.5 : i / (pinCount - 1);
       const pinY = y - sideHeight * 0.31 + t * sideHeight * 0.62;
       parts.push(
-        Bodies.rectangle(leftX - thickness * 0.78, pinY, pinWidth, pinHeight, pinOptions),
-        Bodies.rectangle(rightX + thickness * 0.78, pinY, pinWidth, pinHeight, pinOptions)
+        Bodies.rectangle(
+          leftX - thickness * 0.78,
+          pinY,
+          pinWidth,
+          pinHeight,
+          pinOptions,
+        ),
+        Bodies.rectangle(
+          rightX + thickness * 0.78,
+          pinY,
+          pinWidth,
+          pinHeight,
+          pinOptions,
+        ),
       );
     }
 
@@ -1646,8 +1881,8 @@
           bottomY - thickness * 0.68,
           width * 0.16,
           thickness * 0.36,
-          busOptions
-        )
+          busOptions,
+        ),
       );
     }
 
@@ -1714,7 +1949,13 @@
       Bodies.rectangle(leftX, y, thickness, sideHeight, wallOptions),
       Bodies.rectangle(rightX, y, thickness, sideHeight, wallOptions),
       Bodies.rectangle(x, bottomY, width, thickness, wallOptions),
-      Bodies.rectangle(x, y - sideHeight * 0.48, thickness * 0.46, sideHeight * 0.22, dataOptions),
+      Bodies.rectangle(
+        x,
+        y - sideHeight * 0.48,
+        thickness * 0.46,
+        sideHeight * 0.22,
+        dataOptions,
+      ),
       Bodies.circle(x, y - sideHeight * 0.62, thickness * 0.48, sensorOptions),
     ];
     const nodeY = bottomY - thickness * 0.85;
@@ -1722,14 +1963,38 @@
     const nodeOffsets = [-0.26, 0, 0.26];
 
     nodeOffsets.forEach((offset) => {
-      parts.push(Bodies.circle(x + width * offset, nodeY, nodeRadius, dataOptions));
+      parts.push(
+        Bodies.circle(x + width * offset, nodeY, nodeRadius, dataOptions),
+      );
     });
 
     parts.push(
-      Bodies.rectangle(x - width * 0.13, nodeY, width * 0.2, thickness * 0.22, dataOptions),
-      Bodies.rectangle(x + width * 0.13, nodeY, width * 0.2, thickness * 0.22, dataOptions),
-      Bodies.circle(leftX + thickness * 1.05, y - sideHeight * 0.18, thickness * 0.42, sensorOptions),
-      Bodies.circle(rightX - thickness * 1.05, y - sideHeight * 0.18, thickness * 0.42, sensorOptions)
+      Bodies.rectangle(
+        x - width * 0.13,
+        nodeY,
+        width * 0.2,
+        thickness * 0.22,
+        dataOptions,
+      ),
+      Bodies.rectangle(
+        x + width * 0.13,
+        nodeY,
+        width * 0.2,
+        thickness * 0.22,
+        dataOptions,
+      ),
+      Bodies.circle(
+        leftX + thickness * 1.05,
+        y - sideHeight * 0.18,
+        thickness * 0.42,
+        sensorOptions,
+      ),
+      Bodies.circle(
+        rightX - thickness * 1.05,
+        y - sideHeight * 0.18,
+        thickness * 0.42,
+        sensorOptions,
+      ),
     );
 
     const platform = Body.create({
@@ -1782,7 +2047,13 @@
       Bodies.circle(x, y, radius, capOptions),
       Bodies.rectangle(x, y, radius * 1.45, thickness * 0.48, bandOptions),
       Bodies.rectangle(x, y, thickness * 0.48, radius * 1.45, bandOptions),
-      Bodies.rectangle(x, y + radius * 0.58, radius * 1.22, thickness * 0.6, capOptions),
+      Bodies.rectangle(
+        x,
+        y + radius * 0.58,
+        radius * 1.22,
+        thickness * 0.6,
+        capOptions,
+      ),
     ];
     const platform = Body.create({
       isStatic: true,
@@ -1813,7 +2084,12 @@
     };
   }
 
-  function createMovableCupPlatform(layout, state, index, metrics = cupBuildMetrics()) {
+  function createMovableCupPlatform(
+    layout,
+    state,
+    index,
+    metrics = cupBuildMetrics(),
+  ) {
     const cupOptions = {
       x: state.xRatio * metrics.worldWidth,
       y: state.yRatio * metrics.worldHeight,
@@ -1913,7 +2189,8 @@
       { xRatio: 0.88, yRatio: 0.3 },
     ];
     const slot = spawnSlots[spawnedCupStates.length % spawnSlots.length];
-    const rowOffset = Math.floor(spawnedCupStates.length / spawnSlots.length) * 0.08;
+    const rowOffset =
+      Math.floor(spawnedCupStates.length / spawnSlots.length) * 0.08;
 
     return {
       layoutIndex,
@@ -2033,14 +2310,14 @@
       height + WORLD.floorHeight / 2,
       leftFloorEnd - leftFloorStart,
       WORLD.floorHeight,
-      floorOptions
+      floorOptions,
     );
     const rightFloor = Bodies.rectangle(
       (rightFloorStart + rightFloorEnd) / 2,
       height + WORLD.floorHeight / 2,
       rightFloorEnd - rightFloorStart,
       WORLD.floorHeight,
-      floorOptions
+      floorOptions,
     );
     const drainLipOptions = {
       isStatic: true,
@@ -2053,14 +2330,14 @@
       floorTop + WORLD.floorHeight * 0.18,
       12,
       WORLD.floorHeight * 0.36,
-      drainLipOptions
+      drainLipOptions,
     );
     const drainRightLip = Bodies.rectangle(
       rightFloorStart,
       floorTop + WORLD.floorHeight * 0.18,
       12,
       WORLD.floorHeight * 0.36,
-      drainLipOptions
+      drainLipOptions,
     );
     drainSensor = Bodies.rectangle(
       drainX,
@@ -2073,7 +2350,7 @@
         render: {
           visible: false,
         },
-      }
+      },
     );
 
     const leftWall = Bodies.rectangle(-wt / 2, height / 2, wt, height * 2, {
@@ -2082,17 +2359,24 @@
       render: { fillStyle: "#355265" },
     });
 
-    const rightWall = Bodies.rectangle(width + wt / 2, height / 2, wt, height * 2, {
-      isStatic: true,
-      restitution: WORLD.surfaceRestitution,
-      render: { fillStyle: "#355265" },
-    });
+    const rightWall = Bodies.rectangle(
+      width + wt / 2,
+      height / 2,
+      wt,
+      height * 2,
+      {
+        isStatic: true,
+        restitution: WORLD.surfaceRestitution,
+        render: { fillStyle: "#355265" },
+      },
+    );
 
     const platformY = height * (2 / 3);
     const cupScale = WORLD.cupScale;
     const platformThickness = WORLD.platformThickness * cupScale;
     const platformWidth = Math.max(180, Math.min(width * 0.62, 500)) * cupScale;
-    const stationaryPlatformBaseHeight = WORLD.stationaryPlatformHeight * cupScale;
+    const stationaryPlatformBaseHeight =
+      WORLD.stationaryPlatformHeight * cupScale;
     const stationaryPlatformHeight = stationaryPlatformBaseHeight * 3;
     const stationaryPlatformY =
       platformY - (stationaryPlatformHeight - stationaryPlatformBaseHeight) / 2;
@@ -2113,13 +2397,26 @@
     draggablePlatforms = spawnedCupStates
       .map((state, index) => {
         const layout = MOVABLE_CUP_LAYOUTS[state.layoutIndex];
-        return layout ? createMovableCupPlatform(layout, state, index, metrics) : null;
+        return layout
+          ? createMovableCupPlatform(layout, state, index, metrics)
+          : null;
       })
       .filter(Boolean);
-    activeDraggableIndex = clamp(activeDraggableIndex, 0, draggablePlatforms.length - 1);
+    activeDraggableIndex = clamp(
+      activeDraggableIndex,
+      0,
+      draggablePlatforms.length - 1,
+    );
     activeDraggablePlatform = draggablePlatforms[activeDraggableIndex] || null;
 
-    boundaries = [leftFloor, rightFloor, drainLeftLip, drainRightLip, leftWall, rightWall];
+    boundaries = [
+      leftFloor,
+      rightFloor,
+      drainLeftLip,
+      drainRightLip,
+      leftWall,
+      rightWall,
+    ];
     Composite.add(engine.world, [
       ...boundaries,
       drainSensor,
@@ -2197,7 +2494,9 @@
     const cellSize = Math.max(2, METABALLS.cellSize);
     metaballField.cols = Math.ceil(window.innerWidth / cellSize) + 1;
     metaballField.rows = Math.ceil(window.innerHeight / cellSize) + 1;
-    metaballField.values = new Float32Array(metaballField.cols * metaballField.rows);
+    metaballField.values = new Float32Array(
+      metaballField.cols * metaballField.rows,
+    );
     metaballField.maxCol = -1;
     metaballField.maxRow = -1;
   }
@@ -2214,7 +2513,12 @@
       const body = waterBodies[i];
       const { x, y } = body.position;
 
-      if (x < -margin || x > width + margin || y < -margin || y > height + margin) {
+      if (
+        x < -margin ||
+        x > width + margin ||
+        y < -margin ||
+        y > height + margin
+      ) {
         continue;
       }
 
@@ -2233,11 +2537,19 @@
       const body = waterBodies[i];
       const { x, y } = body.position;
 
-      if (x < -margin || x > width + margin || y < -margin || y > height + margin) {
+      if (
+        x < -margin ||
+        x > width + margin ||
+        y < -margin ||
+        y > height + margin
+      ) {
         continue;
       }
 
-      if (visibleCount <= maxParticles || visibleIndex >= Math.floor(nextSampleIndex)) {
+      if (
+        visibleCount <= maxParticles ||
+        visibleIndex >= Math.floor(nextSampleIndex)
+      ) {
         metaballSampleBuffer.push(body);
         nextSampleIndex += step;
 
@@ -2270,10 +2582,22 @@
       const influenceRadiusSq = influenceRadius * influenceRadius;
       const cellSize = METABALLS.cellSize;
 
-      const startCol = Math.max(0, Math.floor((x - influenceRadius) / cellSize));
-      const endCol = Math.min(cols - 1, Math.ceil((x + influenceRadius) / cellSize));
-      const startRow = Math.max(0, Math.floor((y - influenceRadius) / cellSize));
-      const endRow = Math.min(rows - 1, Math.ceil((y + influenceRadius) / cellSize));
+      const startCol = Math.max(
+        0,
+        Math.floor((x - influenceRadius) / cellSize),
+      );
+      const endCol = Math.min(
+        cols - 1,
+        Math.ceil((x + influenceRadius) / cellSize),
+      );
+      const startRow = Math.max(
+        0,
+        Math.floor((y - influenceRadius) / cellSize),
+      );
+      const endRow = Math.min(
+        rows - 1,
+        Math.ceil((y + influenceRadius) / cellSize),
+      );
 
       if (startCol < minCol) {
         minCol = startCol;
@@ -2454,7 +2778,10 @@
     }
 
     buildMetaballField(sampledBodies);
-    if (metaballField.maxCol < metaballField.minCol || metaballField.maxRow < metaballField.minRow) {
+    if (
+      metaballField.maxCol < metaballField.minCol ||
+      metaballField.maxRow < metaballField.minRow
+    ) {
       return;
     }
 
@@ -2479,7 +2806,7 @@
           va,
           vb,
           vc,
-          vd
+          vd,
         );
       }
     }
@@ -2521,7 +2848,10 @@
     if (body.parts && body.parts.length > 1) {
       for (let i = 1; i < body.parts.length; i += 1) {
         const part = body.parts[i];
-        if (Bounds.contains(part.bounds, point) && Vertices.contains(part.vertices, point)) {
+        if (
+          Bounds.contains(part.bounds, point) &&
+          Vertices.contains(part.vertices, point)
+        ) {
           return true;
         }
       }
@@ -2529,7 +2859,10 @@
       return false;
     }
 
-    return Bounds.contains(body.bounds, point) && Vertices.contains(body.vertices, point);
+    return (
+      Bounds.contains(body.bounds, point) &&
+      Vertices.contains(body.vertices, point)
+    );
   }
 
   function findDraggablePlatformAtPoint(point) {
@@ -2551,7 +2884,10 @@
     activeDraggableIndex = platform.cupIndex || 0;
   }
 
-  function clampedDraggablePlatformPosition(pointerWorldPoint, platform = activeDraggablePlatform) {
+  function clampedDraggablePlatformPosition(
+    pointerWorldPoint,
+    platform = activeDraggablePlatform,
+  ) {
     if (!platform) {
       return null;
     }
@@ -2562,18 +2898,14 @@
     const x = clamp(
       pointerWorldPoint.x - dragOffset.x,
       halfWidth + 10,
-      render.options.width - halfWidth - 10
+      render.options.width - halfWidth - 10,
     );
 
     const maxY =
       platform.toolType === "plug"
         ? render.options.height + halfHeight * 0.15
         : render.options.height - halfHeight - 10;
-    const y = clamp(
-      pointerWorldPoint.y - dragOffset.y,
-      halfHeight + 10,
-      maxY
-    );
+    const y = clamp(pointerWorldPoint.y - dragOffset.y, halfHeight + 10, maxY);
 
     return { x, y };
   }
@@ -2587,14 +2919,16 @@
       return false;
     }
 
-    const otherCups = draggablePlatforms.filter((candidate) => candidate !== platform);
+    const otherCups = draggablePlatforms.filter(
+      (candidate) => candidate !== platform,
+    );
     return Query.collides(platform, [centerPlatform, ...otherCups]).length > 0;
   }
 
   function canPlaceDraggablePlatform(
     platform,
     position,
-    angle = platform ? platform.angle : 0
+    angle = platform ? platform.angle : 0,
   ) {
     if (!platform) {
       return false;
@@ -2615,7 +2949,7 @@
   function safeDraggablePlatformTransform(
     platform,
     targetPosition,
-    targetAngle = platform ? platform.angle : 0
+    targetAngle = platform ? platform.angle : 0,
   ) {
     if (!platform || !targetPosition) {
       return null;
@@ -2632,7 +2966,7 @@
     const steps = Math.max(
       1,
       Math.ceil(distance / maxTranslationStep),
-      Math.ceil(Math.abs(angleDelta) / maxAngleStep)
+      Math.ceil(Math.abs(angleDelta) / maxAngleStep),
     );
     let safePosition = startPosition;
     let safeAngle = startAngle;
@@ -2645,7 +2979,9 @@
       };
       const candidateAngle = startAngle + angleDelta * t;
 
-      if (!canPlaceDraggablePlatform(platform, candidatePosition, candidateAngle)) {
+      if (
+        !canPlaceDraggablePlatform(platform, candidatePosition, candidateAngle)
+      ) {
         break;
       }
 
@@ -2657,8 +2993,10 @@
       position: safePosition,
       angle: safeAngle,
       moved:
-        Math.hypot(safePosition.x - startPosition.x, safePosition.y - startPosition.y) > 0.001 ||
-        Math.abs(safeAngle - startAngle) > 0.0001,
+        Math.hypot(
+          safePosition.x - startPosition.x,
+          safePosition.y - startPosition.y,
+        ) > 0.001 || Math.abs(safeAngle - startAngle) > 0.0001,
     };
   }
 
@@ -2694,9 +3032,40 @@
       y: platform.position.y + dy * scale,
     };
 
-    const safeTransform = safeDraggablePlatformTransform(platform, nextPosition);
+    const safeTransform = safeDraggablePlatformTransform(
+      platform,
+      nextPosition,
+    );
     if (!safeTransform || !safeTransform.moved) {
       settleDraggablePlatform(platform);
+      return;
+    }
+
+    Body.setPosition(platform, safeTransform.position, true);
+    Body.setAngularVelocity(platform, 0);
+    syncCupStateFromPlatform(platform);
+  }
+
+  function stepDraggablePlatformMove(deltaMs) {
+    const platform = activeDraggablePlatform;
+    const dx = (moveKeys.right ? 1 : 0) - (moveKeys.left ? 1 : 0);
+    const dy = (moveKeys.down ? 1 : 0) - (moveKeys.up ? 1 : 0);
+    if (!platform || (dx === 0 && dy === 0)) {
+      return;
+    }
+
+    const dt = Math.min(Math.max(deltaMs || 1000 / 60, 0), 34) / 1000;
+    const speed = WORLD.keyMoveSpeed;
+    const nextPosition = {
+      x: platform.position.x + dx * speed * dt,
+      y: platform.position.y + dy * speed * dt,
+    };
+
+    const safeTransform = safeDraggablePlatformTransform(
+      platform,
+      nextPosition,
+    );
+    if (!safeTransform || !safeTransform.moved) {
       return;
     }
 
@@ -2714,7 +3083,11 @@
     const dt = Math.min(Math.max(deltaMs || 1000 / 60, 0), 34) / 1000;
     const nextAngle = platform.angle + tiltInput * WORLD.draggableTiltRate * dt;
 
-    const safeTransform = safeDraggablePlatformTransform(platform, platform.position, nextAngle);
+    const safeTransform = safeDraggablePlatformTransform(
+      platform,
+      platform.position,
+      nextAngle,
+    );
     if (!safeTransform || !safeTransform.moved) {
       Body.setAngularVelocity(platform, 0);
       syncCupStateFromPlatform(platform);
@@ -2843,7 +3216,10 @@
     }
 
     const batchSize = Math.max(1, Math.round(WATER.cullBatchSize));
-    removeWaterBodies(0, Math.min(waterBodies.length, Math.max(overage, batchSize)));
+    removeWaterBodies(
+      0,
+      Math.min(waterBodies.length, Math.max(overage, batchSize)),
+    );
   }
 
   function spawnDrop(sourceX, sourceY) {
@@ -2851,8 +3227,12 @@
 
     const radiusMin = Math.min(WATER.dropRadiusMin, WATER.dropRadiusMax);
     const radiusMax = Math.max(WATER.dropRadiusMin, WATER.dropRadiusMax);
-    const radius = radiusMin + Math.random() * Math.max(radiusMax - radiusMin, 0.0001);
-    const particleSides = Math.max(5, Math.min(10, Math.round(WATER.particleSides)));
+    const radius =
+      radiusMin + Math.random() * Math.max(radiusMax - radiusMin, 0.0001);
+    const particleSides = Math.max(
+      5,
+      Math.min(10, Math.round(WATER.particleSides)),
+    );
     const body = Bodies.polygon(
       sourceX + (Math.random() - 0.5) * WATER.spawnSpreadX,
       sourceY + WATER.spawnOffsetY + (Math.random() - 0.5) * WATER.spawnSpreadY,
@@ -2866,7 +3246,7 @@
         density: WATER.density,
         slop: WATER.slop,
         render: {},
-      }
+      },
     );
     body.circleRadius = radius;
     body.scoreState = {
@@ -2915,7 +3295,10 @@
         x: pointerWorldPoint.x - selectedPlatform.position.x,
         y: pointerWorldPoint.y - selectedPlatform.position.y,
       };
-      dragTarget = clampedDraggablePlatformPosition(pointerWorldPoint, selectedPlatform);
+      dragTarget = clampedDraggablePlatformPosition(
+        pointerWorldPoint,
+        selectedPlatform,
+      );
       canvas.setPointerCapture(evt.pointerId);
       return;
     }
@@ -2963,21 +3346,53 @@
   }
 
   function updateTiltInput(evt, isPressed) {
-    if (evt.key !== "ArrowLeft" && evt.key !== "ArrowRight") {
+    const key = evt.key;
+    const isTilt = key === "q" || key === "Q" || key === "e" || key === "E";
+    const isMove =
+      key === "ArrowLeft" ||
+      key === "ArrowRight" ||
+      key === "ArrowUp" ||
+      key === "ArrowDown" ||
+      key === "a" ||
+      key === "A" ||
+      key === "d" ||
+      key === "D" ||
+      key === "w" ||
+      key === "W" ||
+      key === "s" ||
+      key === "S";
+
+    if (!isTilt && !isMove) {
       return;
     }
 
     evt.preventDefault();
 
-    if (evt.key === "ArrowLeft") {
-      tiltKeys.left = isPressed;
-    } else {
-      tiltKeys.right = isPressed;
+    if (isTilt) {
+      if (key === "q" || key === "Q") {
+        tiltKeys.left = isPressed;
+      } else {
+        tiltKeys.right = isPressed;
+      }
+      tiltInput = (tiltKeys.right ? 1 : 0) - (tiltKeys.left ? 1 : 0);
+      if (tiltInput === 0) {
+        settleDraggablePlatform();
+      }
     }
 
-    tiltInput = (tiltKeys.right ? 1 : 0) - (tiltKeys.left ? 1 : 0);
-    if (tiltInput === 0) {
-      settleDraggablePlatform();
+    if (isMove) {
+      if (key === "ArrowLeft" || key === "a" || key === "A") {
+        moveKeys.left = isPressed;
+      }
+      if (key === "ArrowRight" || key === "d" || key === "D") {
+        moveKeys.right = isPressed;
+      }
+      if (key === "ArrowUp" || key === "w" || key === "W") {
+        moveKeys.up = isPressed;
+      }
+      if (key === "ArrowDown" || key === "s" || key === "S") {
+        moveKeys.down = isPressed;
+      }
     }
   }
 
@@ -2989,7 +3404,8 @@
     prevTime = now;
 
     const instantFps = 1000 / rawDt;
-    smoothedFps = smoothedFps === 0 ? instantFps : smoothedFps * 0.9 + instantFps * 0.1;
+    smoothedFps =
+      smoothedFps === 0 ? instantFps : smoothedFps * 0.9 + instantFps * 0.1;
 
     if (isPouring) {
       emitAccumulator += (dt / 1000) * WATER.emissionRate;
@@ -3011,10 +3427,79 @@
     requestAnimationFrame(tick);
   }
 
+  function applyParticleRepulsion() {
+    const strength = WATER.repulsionStrength;
+    const radiusMul = WATER.repulsionRadius;
+    if (strength <= 0 || radiusMul <= 0 || waterBodies.length < 2) {
+      return;
+    }
+
+    const count = waterBodies.length;
+    const gridSize = Math.max(10, WATER.repulsionGridSize);
+    const grid = new Map();
+
+    for (let i = 0; i < count; i += 1) {
+      const b = waterBodies[i];
+      const cx = (b.position.x / gridSize) | 0;
+      const cy = (b.position.y / gridSize) | 0;
+      const key = cx + cy * 100000;
+      let cell = grid.get(key);
+      if (!cell) {
+        cell = [];
+        grid.set(key, cell);
+      }
+      cell.push(b);
+    }
+
+    grid.forEach((cell, key) => {
+      const cy = (key / 100000) | 0;
+      const cx = key - cy * 100000;
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dy = -1; dy <= 1; dy += 1) {
+          const nKey = cx + dx + (cy + dy) * 100000;
+          const neighbor = grid.get(nKey);
+          if (!neighbor) {
+            continue;
+          }
+          const isSelf = dx === 0 && dy === 0;
+          for (let i = 0; i < cell.length; i += 1) {
+            const a = cell[i];
+            const jStart = isSelf ? i + 1 : 0;
+            for (let j = jStart; j < neighbor.length; j += 1) {
+              const b = neighbor[j];
+              const ex = a.position.x - b.position.x;
+              const ey = a.position.y - b.position.y;
+              const dist2 = ex * ex + ey * ey;
+              const rA = a.circleRadius || 5;
+              const rB = b.circleRadius || 5;
+              const threshold = (rA + rB) * radiusMul;
+              const threshold2 = threshold * threshold;
+              if (dist2 >= threshold2 || dist2 < 0.01) {
+                continue;
+              }
+              const dist = Math.sqrt(dist2);
+              const overlap = 1 - dist / threshold;
+              const force = strength * overlap;
+              const nx = ex / dist;
+              const ny = ey / dist;
+              Body.applyForce(a, a.position, { x: nx * force, y: ny * force });
+              Body.applyForce(b, b.position, {
+                x: -nx * force,
+                y: -ny * force,
+              });
+            }
+          }
+        }
+      }
+    });
+  }
+
   // Move the draggable cup during physics updates so particles collide with its path.
   Events.on(engine, "beforeUpdate", (event) => {
     stepDraggablePlatform();
     stepDraggablePlatformTilt(event.delta);
+    stepDraggablePlatformMove(event.delta);
+    applyParticleRepulsion();
   });
 
   Events.on(engine, "collisionStart", (event) => {
@@ -3025,9 +3510,37 @@
     }
   });
 
+  // Dampen particles inside the active (held) cup so they settle quickly.
+  function dampenCupParticles() {
+    const cup = activeDraggablePlatform;
+    if (!cup || WATER.cupDamping >= 1) {
+      return;
+    }
+
+    const bounds = cup.bounds;
+    const minX = bounds.min.x;
+    const maxX = bounds.max.x;
+    const minY = bounds.min.y;
+    const maxY = bounds.max.y;
+    const d = WATER.cupDamping;
+
+    for (let i = 0; i < waterBodies.length; i += 1) {
+      const body = waterBodies[i];
+      const px = body.position.x;
+      const py = body.position.y;
+      if (px >= minX && px <= maxX && py >= minY && py <= maxY) {
+        Body.setVelocity(body, {
+          x: body.velocity.x * d,
+          y: body.velocity.y * d,
+        });
+      }
+    }
+  }
+
   // Remove particles that drift too far below/above the playable area.
   Events.on(engine, "afterUpdate", () => {
     removeQueuedBlackHoleParticles();
+    dampenCupParticles();
 
     const width = render.options.width;
     const height = render.options.height;
